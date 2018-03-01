@@ -1,0 +1,40 @@
+org 0x8000
+bits 16
+
+push ebx
+
+xor eax, eax
+xor ebx, ebx
+xor cx, cx
+xor dx, dx
+
+mov ax, 0xE801					; BIOS function
+
+clc								; Clear carry
+
+int 0x15						; Detect memory
+
+;jc err							; Catch errors
+cmp ah, 0x86
+;je err
+cmp ah, 0x80
+;je err
+
+test cx, cx						; Is CX null?
+jz use_ax_bx
+
+mov ax, cx
+mov bx, dx
+
+use_ax_bx:
+test bx, bx							; If mem > 16M == 0, there is not enough memory. Abort.
+;jz err
+mov eax, 0x10000					; Get memory in bytes, and save it
+mul ebx
+
+pop ebx
+
+mov dword [ebx], eax
+add dword [ebx], 0x1000000	; Add lower memory size
+
+ret

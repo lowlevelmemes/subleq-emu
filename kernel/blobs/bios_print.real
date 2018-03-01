@@ -1,0 +1,23 @@
+org 0x8000
+bits 16
+
+mov esi, ebx
+
+mov ah, 0x0e
+loop:
+    a32 o32 lodsb
+    test al, al
+    jz out
+    cmp al, 0x0a
+    je newline
+    int 0x10
+    jmp loop
+newline:
+    mov al, 0x0d
+    int 0x10
+    mov al, 0x0a
+    int 0x10
+    jmp loop
+out:
+
+ret
