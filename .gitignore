@@ -1,0 +1,7 @@
+**/*.o
+**/*.bin
+**/*.iso
+**/*.iso.xz
+dawn.zip
+Dawn
+kernel/initramfs

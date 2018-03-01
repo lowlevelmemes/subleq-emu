@@ -1,3 +1,6 @@
+You can download a pre-built ISO here:
+  https://github.com/mintsuki/subleq-emu/releases/download/bin-release1/subleq.iso.xz
+
 Quick readme on how to build:
 
   - get a x86_64-elf gcc+binutils toolchain and add it to your path
