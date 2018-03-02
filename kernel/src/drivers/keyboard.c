@@ -51,6 +51,51 @@ extern void _writeram(uint64_t, uint64_t);
 void keyboard_handler(uint8_t input_byte) {
     char c;
 
+    switch (input_byte) {
+        case 0x4b:
+            /* keypad 4 */
+            _writeram(335542176 + 3 * 8, -0x3000000);
+            return;
+        case 0x4d:
+            /* keypad 6 */
+            _writeram(335542176 + 3 * 8, 0x3000000);
+            return;
+        case 0x48:
+            /* keypad 8 */
+            _writeram(335542176 + 4 * 8, -0x3000000);
+            return;
+        case 0x50:
+            /* keypad 2 */
+            _writeram(335542176 + 4 * 8, 0x3000000);
+            return;
+        case 0x47:
+            /* keypad 7 */
+            _writeram(335542176 + 0 * 8, 0x100000000);
+            return;
+        case 0xc7:
+            /* keypad 7 rel */
+            _writeram(335542176 + 0 * 8, 0);
+            return;
+        case 0x49:
+            /* keypad 9 */
+            _writeram(335542176 + 1 * 8, 0x100000000);
+            return;
+        case 0xc9:
+            /* keypad 9 rel */
+            _writeram(335542176 + 1 * 8, 0);
+            return;
+        case 0x4c:
+            /* keypad 5 */
+            _writeram(335542176 + 2 * 8, 0x100000000);
+            return;
+        case 0xcc:
+            /* keypad 5 rel */
+            _writeram(335542176 + 2 * 8, 0);
+            return;
+        default:
+            break;
+    }
+
     if (input_byte == LEFT_SHIFT || input_byte == RIGHT_SHIFT || input_byte == LEFT_SHIFT_REL || input_byte == RIGHT_SHIFT_REL)
 		shift_active = !shift_active;
 

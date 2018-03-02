@@ -31,12 +31,10 @@ static void wr_bitmap(size_t i, int val) {
     size_t entry = i / 32;
     size_t offset = i % 32;
 
-    val &= 1;
-
     if (val)
-        mem_bitmap[entry] |= ((uint32_t)val << offset);
+        mem_bitmap[entry] |= (1 << offset);
     else
-        mem_bitmap[entry] &= ~((uint32_t)val << offset);
+        mem_bitmap[entry] &= ~(1 << offset);
 
     return;
 }
