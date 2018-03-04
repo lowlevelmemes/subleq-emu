@@ -79,7 +79,7 @@ full_identity_map:
 
     ; zero out subleq mem
     mov rdi, initramfs_end
-    mov rcx, 0x80000000
+    mov rcx, 0x1a000000
     sub rcx, initramfs_end
     mov rax, 0
     rep stosb

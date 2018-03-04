@@ -121,7 +121,14 @@ void keyboard_handler(uint8_t input_byte) {
             /* TODO */
             /* implement special keys */
 
-            _writeram(335542256, (uint64_t)c);
+            switch (c) {
+                case '\n':
+                    _writeram(335542256, 13);
+                    break;
+                default:
+                    _writeram(335542256, (uint64_t)c);
+                    break;
+            }
 
         }
 

@@ -7,8 +7,8 @@
 /* location of the kernel's page directory */
 #define KERNEL_PAGE             kernel_pagemap
 #define KERNEL_BASE             0x100000
-#define KERNEL_TOP              0x70000000
-#define MEMORY_BASE             0x70000000
+#define KERNEL_TOP              0x1a000000
+#define MEMORY_BASE             KERNEL_TOP
 
 /* arch specific values */
 #define PAGE_SIZE               4096
