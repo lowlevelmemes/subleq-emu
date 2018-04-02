@@ -59,8 +59,12 @@ typedef struct {
     uint16_t mode;
 } get_vbe_t;
 
+void swap_vbufs(void);
 void plot_px(int x, int y, uint32_t hex, uint8_t which_tty);
-extern uint32_t *framebuffer;
+uint32_t get_old_px(int x, int y);
+extern volatile uint32_t *framebuffer;
+extern volatile uint32_t *antibuffer0;
+extern volatile uint32_t *antibuffer1;
 extern uint8_t vga_font[4096];
 extern int edid_width;
 extern int edid_height;

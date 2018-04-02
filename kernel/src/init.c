@@ -9,12 +9,10 @@
 #include <panic.h>
 #include <graphics.h>
 #include <smp.h>
+#include <mouse.h>
+#include <subleq.h>
 
 size_t memory_size;
-
-void subleq(void);
-void init_subleq(void);
-void mouse_install(void);
 
 void kernel_init(void) {
     /* interrupts disabled */
@@ -47,7 +45,7 @@ void kernel_init(void) {
     init_graphics();
     init_tty();
 
-    mouse_install();
+    init_mouse();
 
     /* set PIT frequency */
     set_pit_freq(KRNL_PIT_FREQ);

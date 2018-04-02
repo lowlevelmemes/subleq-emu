@@ -13,7 +13,9 @@ get_vbe_t get_vbe;
 
 int modeset_done = 0;
 
-uint32_t *framebuffer;
+volatile uint32_t *framebuffer;
+volatile uint32_t *antibuffer0;
+volatile uint32_t *antibuffer1;
 
 int edid_width = 0;
 int edid_height = 0;
@@ -28,6 +30,36 @@ void dump_vga_font(uint8_t *bitmap);
 
 uint8_t vga_font[4096];
 
+void swap_vbufs(void) {
+    asm volatile (
+        "1: "
+        "lodsd;"
+        "cmp eax, dword ptr ds:[rbx];"
+        "jne 2f;"
+        "inc rdi;"
+        "inc rdi;"
+        "inc rdi;"
+        "inc rdi;"
+        "jmp 3f;"
+        "2: "
+        "stosd;"
+        "3: "
+        "inc rbx;"
+        "inc rbx;"
+        "inc rbx;"
+        "inc rbx;"
+        "loop 1b;"
+        :
+        : "S" (antibuffer0),
+          "D" (framebuffer),
+          "b" (antibuffer1),
+          "c" (edid_width * edid_height)
+        : "rax"
+    );
+
+    return;
+}
+
 void plot_px(int x, int y, uint32_t hex, uint8_t which_tty) {
     size_t fb_i = x + edid_width * y;
 
@@ -35,6 +67,12 @@ void plot_px(int x, int y, uint32_t hex, uint8_t which_tty) {
         framebuffer[fb_i] = hex;
 
     return;
+}
+
+uint32_t get_old_px(int x, int y) {
+    size_t fb_i = x + edid_width * y;
+
+    return antibuffer0[fb_i];
 }
 
 void init_graphics(void) {
@@ -76,6 +114,8 @@ void init_graphics(void) {
             /* mode found */
             kprint(KPRN_INFO, "VBE found matching mode %x, attempting to set.", get_vbe.mode);
             framebuffer = (uint32_t *)vbe_mode_info.framebuffer;
+            antibuffer0 = kalloc(edid_width * edid_height * sizeof(uint32_t));
+            antibuffer1 = kalloc(edid_width * edid_height * sizeof(uint32_t));
             kprint(KPRN_INFO, "Framebuffer address: %x", vbe_mode_info.framebuffer);
             set_vbe_mode(get_vbe.mode);
             goto success;

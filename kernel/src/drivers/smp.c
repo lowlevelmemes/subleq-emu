@@ -5,10 +5,9 @@
 #include <acpi.h>
 #include <system.h>
 #include <paging.h>
+#include <subleq.h>
 
 #define CPU_STACK_SIZE 4096
-
-void subleq(void);
 
 void ap_kernel_entry(void) {
     /* APs jump here after initialisation */

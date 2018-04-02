@@ -3,6 +3,7 @@
 #include <cio.h>
 #include <klib.h>
 #include <tty.h>
+#include <subleq.h>
 
 #define MAX_CODE 0x57
 #define CAPSLOCK 0x3A
@@ -44,9 +45,6 @@ static const char ascii_nomod[] = {
     'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', '`', '\0', '\\', 'z', 'x', 'c', 'v',
     'b', 'n', 'm', ',', '.', '/', '\0', '\0', '\0', ' '
 };
-
-extern uint64_t _readram(uint64_t);
-extern void _writeram(uint64_t, uint64_t);
 
 void keyboard_handler(uint8_t input_byte) {
     char c;
