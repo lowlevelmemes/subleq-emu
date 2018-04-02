@@ -100,8 +100,8 @@ void init_graphics(void) {
     kprint(KPRN_INFO, "Product name: %s", (char *)vbe_info_struct.prod_name);
     kprint(KPRN_INFO, "Product revision: %s", (char *)vbe_info_struct.prod_rev);
 
-    edid_width = 800;
-    edid_height = 600;
+    edid_width = 1024;
+    edid_height = 768;
 
     /* try to set the mode */
     get_vbe.vbe_mode_info = (uint32_t)&vbe_mode_info;
