@@ -4,6 +4,9 @@
 #define APICREG_ICR0 0x300
 #define APICREG_ICR1 0x310
 
+
+void init_apic(void);
+
 void lapic_enable(void);
 uint32_t lapic_read(uint32_t reg);
 void lapic_write(uint32_t reg, uint32_t val);

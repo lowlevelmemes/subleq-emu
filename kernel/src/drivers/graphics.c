@@ -3,7 +3,6 @@
 #include <klib.h>
 #include <graphics.h>
 #include <cio.h>
-#include <tty.h>
 #include <panic.h>
 
 vbe_info_struct_t vbe_info_struct;
@@ -60,11 +59,10 @@ void swap_vbufs(void) {
     return;
 }
 
-void plot_px(int x, int y, uint32_t hex, uint8_t which_tty) {
+void plot_px(int x, int y, uint32_t hex) {
     size_t fb_i = x + edid_width * y;
 
-    if (current_tty == which_tty)
-        framebuffer[fb_i] = hex;
+    framebuffer[fb_i] = hex;
 
     return;
 }

@@ -86,4 +86,7 @@ extern size_t iso_ptr;
 extern nmi_t *nmis[];
 extern size_t nmi_ptr;
 
+
+void init_acpi(void);
+
 #endif

@@ -4,7 +4,6 @@
 #include <kernel.h>
 #include <klib.h>
 #include <paging.h>
-#include <tty.h>
 #include <system.h>
 #include <cio.h>
 
@@ -124,44 +123,21 @@ uint64_t power(uint64_t x, uint64_t y) {
 
 void kputs(const char *string) {
 
-    #ifdef _SERIAL_KERNEL_OUTPUT_
-      for (size_t i = 0; string[i]; i++) {
-          if (string[i] == '\n') {
-              com_io_wrapper(0, 0, 1, 0x0d);
-              com_io_wrapper(0, 0, 1, 0x0a);
-          } else
-              com_io_wrapper(0, 0, 1, string[i]);
-      }
-    #else
-      tty_kputs(string, 0);
+    #ifdef _KERNEL_DEBUG_OUTPUT_
+      for (size_t i = 0; string[i]; i++)
+          port_out_b(0xe9, string[i]);
     #endif
     
     return;
 }
 
-void tty_kputs(const char *string, int tty) {
-    size_t i;
-    for (i = 0; string[i]; i++)
-        text_putchar(string[i], tty);
-    return;
-}
-
 void knputs(const char *string, size_t len) {
 
-    #ifdef _SERIAL_KERNEL_OUTPUT_
+    #ifdef _KERNEL_DEBUG_OUTPUT_
       for (size_t i = 0; i < len; i++)
-          com_io_wrapper(0, 0, 1, string[i]);
-    #else
-      tty_knputs(string, len, 0);
+          port_out_b(0xe9, string[i]);
     #endif
 
-    return;
-}
-
-void tty_knputs(const char *string, size_t len, int tty) {
-    size_t i;
-    for (i = 0; i < len; i++)
-        text_putchar(string[i], tty);
     return;
 }
 
@@ -181,26 +157,6 @@ void kprn_ui(uint64_t x) {
 
     i++;
     kputs(buf + i);
-
-    return;
-}
-
-void tty_kprn_ui(uint64_t x, int tty) {
-    int i;
-    char buf[21] = {0};
-
-    if (!x) {
-        tty_kputs("0", tty);
-        return;
-    }
-
-    for (i = 19; x; i--) {
-        buf[i] = (x % 10) + 0x30;
-        x = x / 10;
-    }
-
-    i++;
-    tty_kputs(buf + i, tty);
 
     return;
 }
@@ -226,27 +182,6 @@ void kprn_x(uint64_t x) {
     i++;
     kputs("0x");
     kputs(buf + i);
-
-    return;
-}
-
-void tty_kprn_x(uint64_t x, int tty) {
-    int i;
-    char buf[17] = {0};
-
-    if (!x) {
-        tty_kputs("0x0", tty);
-        return;
-    }
-
-    for (i = 15; x; i--) {
-        buf[i] = hex_to_ascii_tab[(x % 16)];
-        x = x / 16;
-    }
-
-    i++;
-    tty_kputs("0x", tty);
-    tty_kputs(buf + i, tty);
 
     return;
 }

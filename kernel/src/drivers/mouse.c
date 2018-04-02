@@ -96,13 +96,13 @@ void put_mouse_cursor(void) {
     for (size_t x = 0; x < 16; x++) {
         for (size_t y = 0; y < 16; y++) {
             plot_px(old_mouse_x + x, old_mouse_y + y, 
-                get_old_px(old_mouse_x + x, old_mouse_y + y), 0);
+                get_old_px(old_mouse_x + x, old_mouse_y + y));
         }
     }
     for (size_t x = 0; x < 16; x++) {
         for (size_t y = 0; y < 16; y++) {
             if (cursor.bitmap[x * 16 + y] != -1)
-                plot_px(mouse_x + x, mouse_y + y, cursor.bitmap[x * 16 + y], 0);
+                plot_px(mouse_x + x, mouse_y + y, cursor.bitmap[x * 16 + y]);
         }
     }
     return;

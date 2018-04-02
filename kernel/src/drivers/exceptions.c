@@ -1,7 +1,6 @@
 #include <stdint.h>
 #include <kernel.h>
 #include <klib.h>
-#include <tty.h>
 #include <cio.h>
 #include <panic.h>
 #include <system.h>

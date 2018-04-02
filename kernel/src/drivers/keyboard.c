@@ -2,7 +2,6 @@
 #include <stdint.h>
 #include <cio.h>
 #include <klib.h>
-#include <tty.h>
 #include <subleq.h>
 
 #define MAX_CODE 0x57
@@ -100,34 +99,30 @@ void keyboard_handler(uint8_t input_byte) {
     else if (input_byte == LEFT_CTRL || input_byte == LEFT_CTRL_REL)
         ctrl_active = !ctrl_active;
 
-    else if (tty[current_tty].kb_l1_buffer_index < KB_L1_SIZE) {
-
-        if (input_byte < MAX_CODE) {
+    if (input_byte < MAX_CODE) {
             
-            if (!capslock_active && !shift_active)
-                c = ascii_nomod[input_byte];
+        if (!capslock_active && !shift_active)
+            c = ascii_nomod[input_byte];
 
-            else if (!capslock_active && shift_active)
-                c = ascii_shift[input_byte];
+        else if (!capslock_active && shift_active)
+            c = ascii_shift[input_byte];
 
-            else if (capslock_active && shift_active)
-                c = ascii_shift_capslock[input_byte];
+        else if (capslock_active && shift_active)
+            c = ascii_shift_capslock[input_byte];
 
-            else
-                c = ascii_capslock[input_byte];
+        else
+            c = ascii_capslock[input_byte];
 
-            /* TODO */
-            /* implement special keys */
+        /* TODO */
+        /* implement special keys */
 
-            switch (c) {
-                case '\n':
-                    _writeram(335542256, 13);
-                    break;
-                default:
-                    _writeram(335542256, (uint64_t)c);
-                    break;
-            }
-
+        switch (c) {
+            case '\n':
+                _writeram(335542256, 13);
+                break;
+            default:
+                _writeram(335542256, (uint64_t)c);
+                break;
         }
 
     }

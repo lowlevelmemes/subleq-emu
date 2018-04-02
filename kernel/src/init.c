@@ -2,15 +2,15 @@
 #include <kernel.h>
 #include <paging.h>
 #include <klib.h>
-#include <inits.h>
 #include <cio.h>
-#include <tty.h>
 #include <system.h>
 #include <panic.h>
 #include <graphics.h>
 #include <smp.h>
 #include <mouse.h>
 #include <subleq.h>
+#include <acpi.h>
+#include <apic.h>
 
 size_t memory_size;
 
@@ -41,9 +41,8 @@ void kernel_init(void) {
       debug_kernel_console_init();
     #endif
 
-    /* initialise graphics mode and TTYs */
+    /* initialise graphics mode */
     init_graphics();
-    init_tty();
 
     init_mouse();
 

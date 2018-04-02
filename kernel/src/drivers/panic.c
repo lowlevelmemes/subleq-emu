@@ -1,6 +1,5 @@
 #include <kernel.h>
 #include <klib.h>
-#include <tty.h>
 #include <cio.h>
 #include <system.h>
 

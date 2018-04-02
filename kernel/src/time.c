@@ -1,7 +1,6 @@
 #include <stdint.h>
 #include <kernel.h>
 #include <klib.h>
-#include <tty.h>
 #include <apic.h>
 #include <acpi.h>
 #include <graphics.h>
@@ -20,13 +19,6 @@ void timer_interrupt(void) {
     poll_mouse();
 
     _writeram(335544304, _readram(335544304) + (0x100000000 / KRNL_PIT_FREQ));
-
-    if (tty_needs_refresh != -1) {
-        if (!(uptime_raw % TTY_REDRAW_LIMIT)) {
-            tty_refresh(tty_needs_refresh);
-            tty_needs_refresh = -1;
-        }
-    }
 
     if (!(uptime_raw % (KRNL_PIT_FREQ / 40))) {     /* 40 FPS */
         subleq_redraw_screen();
