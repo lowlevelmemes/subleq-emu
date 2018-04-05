@@ -10,10 +10,9 @@
     sub rdi, rbx
     bswap rdi
     mov qword [rax+rdx], rdi
-    bswap rdi
-    cmp rdi, 0
-    jle .%1a
-    add rsi, 8
+    js .%1a
+    jz .%1a
+    lodsq
     jmp .%1b
   .%1a:
     lodsq
@@ -110,7 +109,7 @@ subleq_cycle:
     ; return
     ; RAX = ESP
 
-    mov rcx, 4096 / 8
+    mov rcx, 4096 / 4
     mov rdx, initramfs
     lea rsi, [rdi+rdx]
 
@@ -119,15 +118,9 @@ subleq_cycle:
     subleq_loop 2
     subleq_loop 3
     subleq_loop 4
-    subleq_loop 5
-    subleq_loop 6
-    subleq_loop 7
-    subleq_loop 8
 
     dec rcx
-    test rcx, rcx
-    jz .out
-    jmp .main_loop
+    jnz .main_loop
 
   .out:
     sub rsi, rdx
