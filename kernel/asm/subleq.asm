@@ -10,15 +10,11 @@
     sub rdi, rbx
     bswap rdi
     mov qword [rax+rdx], rdi
-    js .%1a
-    jz .%1a
     lodsq
-    jmp .%1b
-  .%1a:
-    lodsq
+    jg .%1a
     bswap rax
     lea rsi, [rax+rdx]
-  .%1b:
+  .%1a:
 %endmacro
 
 extern initramfs
