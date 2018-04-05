@@ -1,37 +1,25 @@
 %macro subleq_loop 1
     lodsq
     bswap rax
-    mov r8, rax
+    mov rbx, qword [rax+rdx]
+    bswap rbx
     lodsq
     bswap rax
-    mov r9, rax
-    push rsi
-    mov rsi, r9
-    add rsi, rdx
-    lodsq
-    bswap rax
-    mov r10, rax
-    mov rsi, r8
-    add rsi, rdx
-    lodsq
-    bswap rax
-    sub r10, rax
-    pop rsi
-    cmp r10, 0
+    mov rdi, qword [rax+rdx]
+    bswap rdi
+    sub rdi, rbx
+    bswap rdi
+    mov qword [rax+rdx], rdi
+    bswap rdi
+    cmp rdi, 0
     jle .%1a
     add rsi, 8
     jmp .%1b
   .%1a:
     lodsq
     bswap rax
-    mov rsi, rax
-    add rsi, rdx
+    lea rsi, [rax+rdx]
   .%1b:
-    mov rdi, r9
-    add rdi, rdx
-    mov rax, r10
-    bswap rax
-    stosq
 %endmacro
 
 extern initramfs
@@ -90,13 +78,7 @@ subleq:
 
         .execute_cycle:
         mov rdi, r8         ; eip = subleq_cycle(eip);
-        push r9
-        push r10
-        push r11
         call subleq_cycle
-        pop r11
-        pop r10
-        pop r9
         mov r8, rax
 
         bswap rax
@@ -128,22 +110,24 @@ subleq_cycle:
     ; return
     ; RAX = ESP
 
-    mov rcx, 4096 / 4
+    mov rcx, 4096 / 8
     mov rdx, initramfs
-    mov rsi, rdi
-    add rsi, rdx
+    lea rsi, [rdi+rdx]
 
   .main_loop:
     subleq_loop 1
     subleq_loop 2
     subleq_loop 3
     subleq_loop 4
+    subleq_loop 5
+    subleq_loop 6
+    subleq_loop 7
+    subleq_loop 8
 
     dec rcx
     test rcx, rcx
     jz .out
-    mov rax, .main_loop
-    jmp rax
+    jmp .main_loop
 
   .out:
     sub rsi, rdx
