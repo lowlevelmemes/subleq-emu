@@ -4,7 +4,7 @@
 
 // misc tunables
 
-#define KRNL_PIT_FREQ 4000
+#define KRNL_PIT_FREQ 1000
 
 
 #define MAX_MADT 128
