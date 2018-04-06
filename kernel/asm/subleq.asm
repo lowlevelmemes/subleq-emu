@@ -1,6 +1,6 @@
 %macro subleq_loop 1
-    mov rbx, qword [rsi]
-    mov rax, qword [rsi+8]
+    pop rbx
+    pop rax
     bswap rbx
     bswap rax
     mov rbx, qword [rbx+rdx]
@@ -8,13 +8,12 @@
     bswap rbx
     bswap rdi
     sub rdi, rbx
-    lea rsi, [rsi+24]
     bswap rdi
+    pop rbx
     mov qword [rax+rdx], rdi
     jg .%1a
-    mov rax, qword [rsi-8]
-    bswap rax
-    lea rsi, [rax+rdx]
+    bswap rbx
+    lea rsp, [rbx+rdx]
   .%1a:
 %endmacro
 
@@ -106,24 +105,31 @@ subleq_cycle:
     ; return
     ; RAX = ESP
 
-    mov rcx, 4096 / 6
+    mov rcx, 4096 / 4
     mov rdx, initramfs
-    lea rsi, [rdi+rdx]
+
+    cli
+    push rbp
+    mov rbp, rsp
+
+    lea rsp, [rdi+rdx]
 
   .main_loop:
     subleq_loop 1
     subleq_loop 2
     subleq_loop 3
     subleq_loop 4
-    subleq_loop 5
-    subleq_loop 6
 
     dec rcx
     jnz .main_loop
 
   .out:
-    sub rsi, rdx
-    mov rax, rsi
+    mov rax, rsp
+    mov rsp, rbp
+    pop rbp
+    sti
+
+    sub rax, rdx
     ret
 
 _readram:
