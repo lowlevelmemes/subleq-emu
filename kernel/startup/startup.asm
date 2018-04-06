@@ -4,17 +4,54 @@
 ; long mode, then it should call 'kernel_init'.
 
 extern kernel_init
+extern initramfs
 global startup
+global kernel_pagemap
+global kernel_pagemap_tables
+global subleq_pagemap
 
 section .data
 
 align 4096
-early_pagemap:
-    times (512 * (8 + 1 + 1 + 1)) dq 0
-    ; 8 page tables (16 M)
-    ; 1 page directory
-    ; 1 pdpt
-    ; 1 pml4
+
+kernel_pagemap_tables:
+kernel_pml4:
+    times 512 dq 0
+
+kernel_pdpt_low:
+    times 512 dq 0
+
+kernel_pdpt_hi:
+    times 512 dq 0
+
+kernel_pd:
+    .1:
+    times 512 dq 0
+    .2:
+    times 512 dq 0
+    .3:
+    times 512 dq 0
+    .4:
+    times 512 dq 0
+
+subleq_pagemap:
+.pml4:
+    times 512 dq 0
+
+.pdpt_low:
+    times 512 dq 0
+
+.pd:
+    .pd1:
+    times 512 dq 0
+    .pd2:
+    times 512 dq 0
+    .pd3:
+    times 512 dq 0
+    .pd4:
+    times 512 dq 0
+
+kernel_pagemap dq kernel_pagemap_tables
 
 align 16
 GDT:
@@ -150,70 +187,122 @@ startup:
     ; load the GDT
     lgdt [GDT]
 
-    ; prepare the page directory and page table
-    ; identity map the first 16 MiB of RAM
-
-    ; build the 8 identity mapped page tables starting at 0x10000
-    mov edi, early_pagemap
-    mov eax, 0x03
-    mov ecx, 512 * 8
-    .loop:
+    mov edi, subleq_pagemap.pd
+    mov eax, initramfs
+    or eax, 0x03 | (1 << 7)
+    mov ecx, 512 * 4
+    .loop0:
         stosd
-        add eax, 0x1000
+        add eax, 0x200000
         mov dword [edi], 0
         add edi, 4
-        loop .loop
-    ; build the page directory
-    mov edx, edi ; save starting address of page directory
-    mov eax, (early_pagemap + 0x03)
-    stosd
-    xor eax, eax
-    stosd
-    mov eax, (early_pagemap + 0x1003)
-    stosd
-    xor eax, eax
-    stosd
-    mov eax, (early_pagemap + 0x2003)
-    stosd
-    xor eax, eax
-    stosd
-    mov eax, (early_pagemap + 0x3003)
-    stosd
-    xor eax, eax
-    stosd
-    mov eax, (early_pagemap + 0x4003)
-    stosd
-    xor eax, eax
-    stosd
-    mov eax, (early_pagemap + 0x5003)
-    stosd
-    xor eax, eax
-    stosd
-    mov eax, (early_pagemap + 0x6003)
-    stosd
-    xor eax, eax
-    stosd
-    mov eax, (early_pagemap + 0x7003)
-    stosd
-    xor eax, eax
-    stosd
-    add edi, (4096 - (8 * 8))
-    ; build the pdpt
-    mov eax, edx
-    mov edx, edi
+        loop .loop0
+
+    mov edi, subleq_pagemap.pdpt_low
+    mov eax, subleq_pagemap.pd1
     or eax, 0x03
     stosd
     xor eax, eax
     stosd
-    add edi, (4096 - (1 * 8))
-    ; build the pml4
-    mov eax, edx
-    mov edx, edi
+    mov eax, subleq_pagemap.pd2
+    or eax, 0x03
+    stosd
+    xor eax, eax
+    stosd
+    mov eax, subleq_pagemap.pd3
+    or eax, 0x03
+    stosd
+    xor eax, eax
+    stosd
+    mov eax, subleq_pagemap.pd4
     or eax, 0x03
     stosd
     xor eax, eax
     stosd
 
+    mov edi, subleq_pagemap.pml4
+    mov eax, subleq_pagemap.pdpt_low
+    or eax, 0x03
+    stosd
+    xor eax, eax
+    stosd
+
+    mov edi, subleq_pagemap.pml4+(511*8)
+    mov eax, kernel_pdpt_hi
+    or eax, 0x03
+    stosd
+    xor eax, eax
+    stosd
+
+    mov edi, kernel_pd
+    mov eax, 0x03 | (1 << 7)
+    mov ecx, 512 * 4
+    .loop1:
+        stosd
+        add eax, 0x200000
+        mov dword [edi], 0
+        add edi, 4
+        loop .loop1
+
+    mov edi, kernel_pdpt_low
+    mov eax, kernel_pd.1
+    or eax, 0x03
+    stosd
+    xor eax, eax
+    stosd
+    mov eax, kernel_pd.2
+    or eax, 0x03
+    stosd
+    xor eax, eax
+    stosd
+    mov eax, kernel_pd.3
+    or eax, 0x03
+    stosd
+    xor eax, eax
+    stosd
+    mov eax, kernel_pd.4
+    or eax, 0x03
+    stosd
+    xor eax, eax
+    stosd
+
+    mov edi, kernel_pdpt_hi+(508*8)
+    mov eax, kernel_pd.1
+    or eax, 0x03
+    stosd
+    xor eax, eax
+    stosd
+    mov eax, kernel_pd.2
+    or eax, 0x03
+    stosd
+    xor eax, eax
+    stosd
+    mov eax, kernel_pd.3
+    or eax, 0x03
+    stosd
+    xor eax, eax
+    stosd
+    mov eax, kernel_pd.4
+    or eax, 0x03
+    stosd
+    xor eax, eax
+    stosd
+
+    mov edi, kernel_pml4
+    mov eax, kernel_pdpt_low
+    or eax, 0x03
+    stosd
+    xor eax, eax
+    stosd
+
+    mov edi, kernel_pml4+(511*8)
+    mov eax, kernel_pdpt_hi
+    or eax, 0x03
+    stosd
+    xor eax, eax
+    stosd
+
+    mov edx, kernel_pml4
     mov cr3, edx
 
     mov eax, 10100000b

@@ -3,21 +3,23 @@
     pop rax
     bswap rbx
     bswap rax
-    mov rbx, qword [rbx+rdx]
-    mov rdi, qword [rax+rdx]
+    mov rbx, qword [rbx]
+    mov rdi, qword [rax]
     bswap rbx
     bswap rdi
     sub rdi, rbx
     bswap rdi
     pop rbx
-    mov qword [rax+rdx], rdi
+    mov qword [rax], rdi
     jg .%1a
     bswap rbx
-    lea rsp, [rbx+rdx]
+    mov rsp, rbx
   .%1a:
 %endmacro
 
 extern initramfs
+extern kernel_pagemap_tables
+extern subleq_pagemap
 
 global _readram
 global _writeram
@@ -106,13 +108,19 @@ subleq_cycle:
     ; RAX = ESP
 
     mov rcx, 4096 / 4
-    mov rdx, initramfs
 
     cli
     push rbp
     mov rbp, rsp
 
-    lea rsp, [rdi+rdx]
+    mov rsp, rdi
+
+    mov rax, 0xffffffff00000000
+    add rax, .tohigherhalf
+    jmp rax
+  .tohigherhalf:
+    mov rax, subleq_pagemap
+    mov cr3, rax
 
   .main_loop:
     subleq_loop 1
@@ -124,12 +132,17 @@ subleq_cycle:
     jnz .main_loop
 
   .out:
+    mov rax, kernel_pagemap_tables
+    mov cr3, rax
+    mov rax, .tolowerhalf
+    jmp rax
+  .tolowerhalf:
+
     mov rax, rsp
     mov rsp, rbp
     pop rbp
     sti
 
-    sub rax, rdx
     ret
 
 _readram:

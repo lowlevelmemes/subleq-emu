@@ -23,7 +23,7 @@ SECTIONS
         *(.bss)
     }
 
-    .initramfs ALIGN(4K) :
+    .initramfs ALIGN(2M) :
     {
         initramfs = .;
         *(.initramfs)
