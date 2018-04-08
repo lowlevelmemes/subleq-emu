@@ -107,7 +107,7 @@ subleq_cycle:
     ; return
     ; RAX = ESP
 
-    mov rcx, 4096 / 4
+    mov rcx, 4096 / 3
 
     cli
     push rbp
@@ -126,7 +126,6 @@ subleq_cycle:
     subleq_loop 1
     subleq_loop 2
     subleq_loop 3
-    subleq_loop 4
 
     dec rcx
     jnz .main_loop

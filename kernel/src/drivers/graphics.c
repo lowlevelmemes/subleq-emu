@@ -35,19 +35,14 @@ void swap_vbufs(void) {
         "lodsd;"
         "cmp eax, dword ptr ds:[rbx];"
         "jne 2f;"
-        "inc rdi;"
-        "inc rdi;"
-        "inc rdi;"
-        "inc rdi;"
+        "add rdi, 4;"
         "jmp 3f;"
         "2: "
         "stosd;"
         "3: "
-        "inc rbx;"
-        "inc rbx;"
-        "inc rbx;"
-        "inc rbx;"
-        "loop 1b;"
+        "add rbx, 4;"
+        "dec rcx;"
+        "jnz 1b;"
         :
         : "S" (antibuffer0),
           "D" (framebuffer),
@@ -60,6 +55,9 @@ void swap_vbufs(void) {
 }
 
 void plot_px(int x, int y, uint32_t hex) {
+    if (x >= edid_width || y >= edid_height)
+        return;
+
     size_t fb_i = x + edid_width * y;
 
     framebuffer[fb_i] = hex;
@@ -68,6 +66,9 @@ void plot_px(int x, int y, uint32_t hex) {
 }
 
 uint32_t get_old_px(int x, int y) {
+    if (x >= edid_width || y >= edid_height)
+        return 0;
+
     size_t fb_i = x + edid_width * y;
 
     return antibuffer0[fb_i];
