@@ -15,6 +15,10 @@ void ap_kernel_entry(void) {
     kprint(KPRN_INFO, "SMP: Started up AP #%u", get_cpu_number());
     kprint(KPRN_INFO, "SMP: AP #%u kernel stack top: %x", get_cpu_number(), get_cpu_kernel_stack());
 
+    lapic_enable();
+
+    asm volatile ("sti");
+
     subleq();
 
     return;
@@ -74,7 +78,7 @@ static int start_ap(uint8_t target_apic_id, int cpu_number) {
     cpu_local->current_task = 0;
     cpu_local->idle_cpu = 1;
 
-    void *trampoline = prepare_smp_trampoline(ap_kernel_entry, kernel_pagemap, kernel_stack, cpu_local);
+    void *trampoline = prepare_smp_trampoline(ap_kernel_entry, &kernel_pagemap, kernel_stack, cpu_local);
 
     /* Send the INIT IPI */
     lapic_write(APICREG_ICR1, ((uint32_t)target_apic_id) << 24);

@@ -18,7 +18,7 @@
 %endmacro
 
 extern initramfs
-extern kernel_pagemap_tables
+extern kernel_pagemap
 extern subleq_pagemap
 
 extern reboot
@@ -110,6 +110,7 @@ subleq:
         .case4:
         ; halted
         mov r9, 1               ; is_halted = 1;
+        hlt
         jmp .loop               ; continue;
 
 subleq_cycle:
@@ -141,7 +142,7 @@ subleq_cycle:
     jnz .main_loop
 
   .out:
-    mov rax, kernel_pagemap_tables
+    mov rax, kernel_pagemap
     mov cr3, rax
     mov rax, .tolowerhalf
     jmp rax

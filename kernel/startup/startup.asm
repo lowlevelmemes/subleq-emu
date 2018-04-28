@@ -7,32 +7,33 @@ extern kernel_init
 extern initramfs
 global startup
 global kernel_pagemap
-global kernel_pagemap_tables
 global subleq_pagemap
 
 section .data
 
 align 4096
 
-kernel_pagemap_tables:
-kernel_pml4:
+kernel_pagemap:
+.pml4:
     times 512 dq 0
 
-kernel_pdpt_low:
+.pdpt_low:
     times 512 dq 0
 
-kernel_pdpt_hi:
+.pdpt_hi:
     times 512 dq 0
 
-kernel_pd:
-    .1:
+.pd:
+    .pd1:
     times 512 dq 0
-    .2:
+    .pd2:
     times 512 dq 0
-    .3:
+    .pd3:
     times 512 dq 0
-    .4:
+    .pd4:
     times 512 dq 0
+
+align 4096
 
 subleq_pagemap:
 .pml4:
@@ -50,8 +51,6 @@ subleq_pagemap:
     times 512 dq 0
     .pd4:
     times 512 dq 0
-
-kernel_pagemap dq kernel_pagemap_tables
 
 align 16
 GDT:
@@ -228,13 +227,13 @@ startup:
     stosd
 
     mov edi, subleq_pagemap.pml4+(511*8)
-    mov eax, kernel_pdpt_hi
+    mov eax, kernel_pagemap.pdpt_hi
     or eax, 0x03
     stosd
     xor eax, eax
     stosd
 
-    mov edi, kernel_pd
+    mov edi, kernel_pagemap.pd
     mov eax, 0x03 | (1 << 7)
     mov ecx, 512 * 4
     .loop1:
@@ -244,65 +243,65 @@ startup:
         add edi, 4
         loop .loop1
 
-    mov edi, kernel_pdpt_low
-    mov eax, kernel_pd.1
+    mov edi, kernel_pagemap.pdpt_low
+    mov eax, kernel_pagemap.pd1
     or eax, 0x03
     stosd
     xor eax, eax
     stosd
-    mov eax, kernel_pd.2
+    mov eax, kernel_pagemap.pd2
     or eax, 0x03
     stosd
     xor eax, eax
     stosd
-    mov eax, kernel_pd.3
+    mov eax, kernel_pagemap.pd3
     or eax, 0x03
     stosd
     xor eax, eax
     stosd
-    mov eax, kernel_pd.4
-    or eax, 0x03
-    stosd
-    xor eax, eax
-    stosd
-
-    mov edi, kernel_pdpt_hi+(508*8)
-    mov eax, kernel_pd.1
-    or eax, 0x03
-    stosd
-    xor eax, eax
-    stosd
-    mov eax, kernel_pd.2
-    or eax, 0x03
-    stosd
-    xor eax, eax
-    stosd
-    mov eax, kernel_pd.3
-    or eax, 0x03
-    stosd
-    xor eax, eax
-    stosd
-    mov eax, kernel_pd.4
+    mov eax, kernel_pagemap.pd4
     or eax, 0x03
     stosd
     xor eax, eax
     stosd
 
-    mov edi, kernel_pml4
-    mov eax, kernel_pdpt_low
+    mov edi, kernel_pagemap.pdpt_hi+(508*8)
+    mov eax, kernel_pagemap.pd1
+    or eax, 0x03
+    stosd
+    xor eax, eax
+    stosd
+    mov eax, kernel_pagemap.pd2
+    or eax, 0x03
+    stosd
+    xor eax, eax
+    stosd
+    mov eax, kernel_pagemap.pd3
+    or eax, 0x03
+    stosd
+    xor eax, eax
+    stosd
+    mov eax, kernel_pagemap.pd4
     or eax, 0x03
     stosd
     xor eax, eax
     stosd
 
-    mov edi, kernel_pml4+(511*8)
-    mov eax, kernel_pdpt_hi
+    mov edi, kernel_pagemap.pml4
+    mov eax, kernel_pagemap.pdpt_low
     or eax, 0x03
     stosd
     xor eax, eax
     stosd
 
-    mov edx, kernel_pml4
+    mov edi, kernel_pagemap.pml4+(511*8)
+    mov eax, kernel_pagemap.pdpt_hi
+    or eax, 0x03
+    stosd
+    xor eax, eax
+    stosd
+
+    mov edx, kernel_pagemap
     mov cr3, edx
 
     mov eax, 10100000b
