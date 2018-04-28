@@ -6,7 +6,6 @@
 #include <panic.h>
 
 vbe_info_struct_t vbe_info_struct;
-edid_info_struct_t edid_info_struct;
 vbe_mode_info_t vbe_mode_info;
 get_vbe_t get_vbe;
 
@@ -16,13 +15,13 @@ volatile uint32_t *framebuffer;
 volatile uint32_t *antibuffer0;
 volatile uint32_t *antibuffer1;
 
-int edid_width = 0;
-int edid_height = 0;
+int vbe_width = 1024;
+int vbe_height = 768;
+int vbe_pitch;
 
 uint16_t vid_modes[1024];
 
 void get_vbe_info(vbe_info_struct_t *vbe_info_struct);
-void get_edid_info(edid_info_struct_t *edid_info_struct);
 void get_vbe_mode_info(get_vbe_t *get_vbe);
 void set_vbe_mode(uint16_t mode);
 void dump_vga_font(uint8_t *bitmap);
@@ -47,7 +46,7 @@ void swap_vbufs(void) {
         : "S" (antibuffer0),
           "D" (framebuffer),
           "b" (antibuffer1),
-          "c" (edid_width * edid_height)
+          "c" ((vbe_pitch / sizeof(uint32_t)) * vbe_height)
         : "rax"
     );
 
@@ -55,23 +54,34 @@ void swap_vbufs(void) {
 }
 
 void plot_px(int x, int y, uint32_t hex) {
-    if (x >= edid_width || y >= edid_height)
+    if (x >= vbe_width || y >= vbe_height)
         return;
 
-    size_t fb_i = x + edid_width * y;
+    size_t fb_i = x + (vbe_pitch / sizeof(uint32_t)) * y;
 
     framebuffer[fb_i] = hex;
 
     return;
 }
 
-uint32_t get_old_px(int x, int y) {
-    if (x >= edid_width || y >= edid_height)
+uint32_t get_ab0_px(int x, int y) {
+    if (x >= vbe_width || y >= vbe_height)
         return 0;
 
-    size_t fb_i = x + edid_width * y;
+    size_t fb_i = x + (vbe_pitch / sizeof(uint32_t)) * y;
 
     return antibuffer0[fb_i];
+}
+
+void plot_ab0_px(int x, int y, uint32_t hex) {
+    if (x >= vbe_width || y >= vbe_height)
+        return;
+
+    size_t fb_i = x + (vbe_pitch / sizeof(uint32_t)) * y;
+
+    antibuffer0[fb_i] = hex;
+
+    return;
 }
 
 void init_graphics(void) {
@@ -86,42 +96,59 @@ void init_graphics(void) {
     get_vbe_info(&vbe_info_struct);
     /* copy the video mode array somewhere else because it might get overwritten */
     for (size_t i = 0; ; i++) {
-        vid_modes[i] = ((uint16_t *)vbe_info_struct.vid_modes)[i];
-        if (((uint16_t *)vbe_info_struct.vid_modes)[i+1] == 0xffff) {
+        vid_modes[i] = ((uint16_t *)(size_t)vbe_info_struct.vid_modes)[i];
+        if (((uint16_t *)(size_t)vbe_info_struct.vid_modes)[i+1] == 0xffff) {
             vid_modes[i+1] = 0xffff;
             break;
         }
     }
 
     kprint(KPRN_INFO, "Version: %u.%u", vbe_info_struct.version_maj, vbe_info_struct.version_min);
-    kprint(KPRN_INFO, "OEM: %s", (char *)vbe_info_struct.oem);
-    kprint(KPRN_INFO, "Graphics vendor: %s", (char *)vbe_info_struct.vendor);
-    kprint(KPRN_INFO, "Product name: %s", (char *)vbe_info_struct.prod_name);
-    kprint(KPRN_INFO, "Product revision: %s", (char *)vbe_info_struct.prod_rev);
-
-    edid_width = 1024;
-    edid_height = 768;
+    kprint(KPRN_INFO, "OEM: %s", (char *)(size_t)vbe_info_struct.oem);
+    kprint(KPRN_INFO, "Graphics vendor: %s", (char *)(size_t)vbe_info_struct.vendor);
+    kprint(KPRN_INFO, "Product name: %s", (char *)(size_t)vbe_info_struct.prod_name);
+    kprint(KPRN_INFO, "Product revision: %s", (char *)(size_t)vbe_info_struct.prod_rev);
 
     /* try to set the mode */
-    get_vbe.vbe_mode_info = (uint32_t)&vbe_mode_info;
+retry:
+    get_vbe.vbe_mode_info = (uint32_t)(size_t)&vbe_mode_info;
     for (size_t i = 0; vid_modes[i] != 0xffff; i++) {
         get_vbe.mode = vid_modes[i];
         get_vbe_mode_info(&get_vbe);
-        if (vbe_mode_info.res_x == edid_width
-            && vbe_mode_info.res_y == edid_height
+        if (vbe_mode_info.res_x == vbe_width
+            && vbe_mode_info.res_y == vbe_height
             && vbe_mode_info.bpp == 32) {
             /* mode found */
             kprint(KPRN_INFO, "VBE found matching mode %x, attempting to set.", get_vbe.mode);
-            framebuffer = (uint32_t *)vbe_mode_info.framebuffer;
-            antibuffer0 = kalloc(edid_width * edid_height * sizeof(uint32_t));
-            antibuffer1 = kalloc(edid_width * edid_height * sizeof(uint32_t));
+            vbe_pitch = (int)vbe_mode_info.pitch;
+            framebuffer = (uint32_t *)(size_t)vbe_mode_info.framebuffer;
+            antibuffer0 = kalloc((vbe_pitch / sizeof(uint32_t)) * vbe_height * sizeof(uint32_t));
+            antibuffer1 = kalloc((vbe_pitch / sizeof(uint32_t)) * vbe_height * sizeof(uint32_t));
             kprint(KPRN_INFO, "Framebuffer address: %x", vbe_mode_info.framebuffer);
             set_vbe_mode(get_vbe.mode);
             goto success;
         }
     }
 
-    panic("VBE: can't set video mode.", 0);
+    if (vbe_width == 1024 && vbe_height == 768) {
+        vbe_width = 800;
+        vbe_height = 600;
+        goto retry;
+    }
+
+    if (vbe_width == 800 && vbe_height == 600) {
+        vbe_width = 640;
+        vbe_height = 480;
+        goto retry;
+    }
+
+    if (vbe_width == 640 && vbe_height == 480) {
+        panic("VBE: can't set video mode.", 0);
+    }
+
+    vbe_width = 1024;
+    vbe_height = 768;
+    goto retry;
 
 success:
     modeset_done = 1;

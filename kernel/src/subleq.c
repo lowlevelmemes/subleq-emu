@@ -9,10 +9,15 @@
 
 static volatile uint64_t last_frame_counter = 0;
 
+extern uint8_t initramfs[];
+
+uint32_t *dawn_framebuffer;
+
 void _strcpyram(uint64_t dest, const char *mem) {
     for (size_t i = 0; mem[i]; i++)
-        _writeram(dest++, (uint64_t)mem[i] << 56);
-    _writeram(dest, 0);
+        initramfs[dest++] = mem[i];
+
+    initramfs[dest] = 0;
 
     return;
 }
@@ -23,19 +28,19 @@ void subleq_redraw_screen(void) {
         volatile uint32_t *tmp = antibuffer0;
         antibuffer0 = antibuffer1;
         antibuffer1 = tmp;
-        asm volatile (
-            "1: "
-            "lodsd;"
-            "rol eax, 8;"
-            "bswap eax;"
-            "stosd;"
-            "loop 1b;"
-            :
-            : "S" (initramfs_addr + 256*1024*1024),
-              "D" (antibuffer0),
-              "c" (edid_width * edid_height)
-            : "rax"
-        );
+        for (size_t x = 0; x < vbe_width; x++) {
+            for (size_t y = 0; y < vbe_height; y++) {
+                size_t fb_i = x + vbe_width * y;
+                uint32_t val = dawn_framebuffer[fb_i];
+                asm volatile (
+                    "rol eax, 8;"
+                    "bswap eax;"
+                    : "=a" (val)
+                    : "a" (val)
+                );
+                plot_ab0_px(x, y, val);
+            }
+        }
         swap_vbufs();
         put_mouse_cursor();
     }
@@ -44,19 +49,14 @@ void subleq_redraw_screen(void) {
 }
 
 void init_subleq(void) {
-
-    for (size_t i = 0; i < edid_width * edid_height; i++)
-        framebuffer[i] = 0;
+    dawn_framebuffer = (uint32_t *)&initramfs[256*1024*1024];
 
     /* CPU id */
     _strcpyram(335413288, "subleq-emu x86");
 
-    /* */
-    _writeram(334364664, (uint64_t)1);
-
     /* display */
-    _writeram(335540096, (uint64_t)edid_width);
-    _writeram(335540096 + 8, (uint64_t)edid_height);
+    _writeram(335540096, (uint64_t)vbe_width);
+    _writeram(335540096 + 8, (uint64_t)vbe_height);
     _writeram(335540096 + 16, (uint64_t)32);
     _writeram(335540096 + 24, (uint64_t)2);
 

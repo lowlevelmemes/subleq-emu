@@ -96,7 +96,7 @@ void put_mouse_cursor(void) {
     for (size_t x = 0; x < 16; x++) {
         for (size_t y = 0; y < 16; y++) {
             plot_px(old_mouse_x + x, old_mouse_y + y, 
-                get_old_px(old_mouse_x + x, old_mouse_y + y));
+                get_ab0_px(old_mouse_x + x, old_mouse_y + y));
         }
     }
     for (size_t x = 0; x < 16; x++) {
@@ -156,18 +156,26 @@ void poll_mouse(void) {
         old_mouse_x = mouse_x;
         old_mouse_y = mouse_y;
 
-        if (!(mouse_x + x_mov < 0) && !(mouse_x + x_mov >= edid_width)) {
+        if (mouse_x + x_mov < 0) {
+            mouse_x = 0;
+        } else if (mouse_x + x_mov >= vbe_width) {
+            mouse_x = vbe_width - 1;
+        } else {
             mouse_x += x_mov;
         }
 
-        if (!(mouse_y - y_mov < 0) && !(mouse_y - y_mov >= edid_height)) {
+        if (mouse_y - y_mov < 0) {
+            mouse_y = 0;
+        } else if (mouse_y - y_mov >= vbe_height) {
+            mouse_y = vbe_height - 1;
+        } else {
             mouse_y -= y_mov;
         }
 
         put_mouse_cursor();
 
-        _writeram(335542176 + 6 * 8, scale_position(0, edid_width, 0, 0x100000000, mouse_x));
-        _writeram(335542176 + 7 * 8, scale_position(0, edid_height, 0, 0x100000000, mouse_y));
+        _writeram(335542176 + 6 * 8, scale_position(0, vbe_width, 0, 0x100000000, mouse_x));
+        _writeram(335542176 + 7 * 8, scale_position(0, vbe_height, 0, 0x100000000, mouse_y));
 
     }
 
@@ -176,8 +184,8 @@ void poll_mouse(void) {
 }
 
 void init_mouse(void) {
-    mouse_x = edid_width / 2;
-    mouse_y = edid_height / 2;
+    mouse_x = vbe_width / 2;
+    mouse_y = vbe_height / 2;
 
     //Enable the auxiliary mouse device
     mouse_wait(1);
