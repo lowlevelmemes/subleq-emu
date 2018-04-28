@@ -21,6 +21,9 @@ extern initramfs
 extern kernel_pagemap_tables
 extern subleq_pagemap
 
+extern reboot
+extern shutdown
+
 global _readram
 global _writeram
 
@@ -52,12 +55,12 @@ subleq:
     mov qword [r10 + 8], 0  ; _writeram(cpu_bank + 8, 0);        // EIP
 
     .loop:
-        test r11, r11
-        jz .execute_cycle
-
         ; check status
         mov rax, qword [r10]
         bswap rax
+
+        test r11, r11
+        jz .cpu0_cases
 
         test rax, rax
         jz .loop
@@ -72,6 +75,13 @@ subleq:
         je .case4
 
         jmp .loop
+
+        .cpu0_cases:
+        cmp rax, 8
+        je shutdown
+
+        cmp rax, 16
+        je reboot
 
         .execute_cycle:
         mov rdi, r8         ; eip = subleq_cycle(eip);
