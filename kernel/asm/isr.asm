@@ -34,11 +34,6 @@
     pop rax
 %endmacro
 
-; misc global references
-global fxstate
-global read_stat
-global write_stat
-
 ; IDT hooks
 ; ... CPU exceptions
 global handler_irq_apic
@@ -68,7 +63,6 @@ global handler_security_exception
 ; ... misc
 global irq0_handler
 global keyboard_isr
-global syscall
 
 ; CPU exception handlers
 extern except_div0
@@ -99,11 +93,6 @@ extern eoi
 extern timer_interrupt
 extern keyboard_handler
 
-section .data
-
-align 16
-fxstate: times 512 db 0
-
 section .text
 
 bits 64
@@ -129,138 +118,114 @@ handler_irq_pic1:
         pop rax
         iretq
 
-except_handler_setup:
-        ret
-
 handler_div0:
-        call except_handler_setup
         pop rdi
         pop rsi
         call except_div0
 
 handler_debug:
-        call except_handler_setup
         pop rdi
         pop rsi
         call except_debug
 
 handler_nmi:
-        call except_handler_setup
         pop rdi
         pop rsi
         call except_nmi
 
 handler_breakpoint:
-        call except_handler_setup
         pop rdi
         pop rsi
         call except_breakpoint
 
 handler_overflow:
-        call except_handler_setup
         pop rdi
         pop rsi
         call except_overflow
 
 handler_bound_range_exceeded:
-        call except_handler_setup
         pop rdi
         pop rsi
         call except_bound_range_exceeded
 
 handler_invalid_opcode:
-        call except_handler_setup
         pop rdi
         pop rsi
         call except_invalid_opcode
 
 handler_device_not_available:
-        call except_handler_setup
         pop rdi
         pop rsi
         call except_device_not_available
 
 handler_double_fault:
-        call except_handler_setup
         pop rdi
         pop rsi
         pop rdx
         call except_double_fault
 
 handler_coprocessor_segment_overrun:
-        call except_handler_setup
         pop rdi
         pop rsi
         call except_coprocessor_segment_overrun
 
 handler_invalid_tss:
-        call except_handler_setup
         pop rdi
         pop rsi
         pop rdx
         call except_invalid_tss
 
 handler_segment_not_present:
-        call except_handler_setup
         pop rdi
         pop rsi
         pop rdx
         call except_segment_not_present
 
 handler_stack_segment_fault:
-        call except_handler_setup
         pop rdi
         pop rsi
         pop rdx
         call except_stack_segment_fault
 
 handler_gpf:
-        call except_handler_setup
         pop rdi
         pop rsi
         pop rdx
         call except_gen_prot_fault
 
 handler_pf:
-        call except_handler_setup
         pop rdi
         pop rsi
         pop rdx
         call except_page_fault
 
 handler_x87_exception:
-        call except_handler_setup
         pop rdi
         pop rsi
         call except_x87_exception
 
 handler_alignment_check:
-        call except_handler_setup
         pop rdi
         pop rsi
         pop rdx
         call except_alignment_check
 
 handler_machine_check:
-        call except_handler_setup
         pop rdi
         pop rsi
         call except_machine_check
 
 handler_simd_exception:
-        call except_handler_setup
         pop rdi
         pop rsi
         call except_simd_exception
 
 handler_virtualisation_exception:
-        call except_handler_setup
         pop rdi
         pop rsi
         call except_virtualisation_exception
 
 handler_security_exception:
-        call except_handler_setup
         pop rdi
         pop rsi
         call except_security_exception

@@ -42,11 +42,11 @@ void init_acpi(void) {
 
 rsdp_found:
     kprint(KPRN_INFO, "ACPI: Found RSDT at %x", rsdp->rsdt_addr);
-    rsdt = (rsdt_t *)rsdp->rsdt_addr;
+    rsdt = (rsdt_t *)(size_t)rsdp->rsdt_addr;
 
     /* search for MADT table */
     for (size_t i = 0; i < rsdt->sdt.length; i++) {
-        madt = (madt_t *)rsdt->sdt_ptr[i];
+        madt = (madt_t *)(size_t)rsdt->sdt_ptr[i];
         if (!kstrncmp(madt->sdt.signature, "APIC", 4)) {
             kprint(KPRN_INFO, "ACPI: Found MADT at %x", (size_t)madt);
             goto madt_found;

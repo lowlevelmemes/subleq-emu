@@ -4,16 +4,10 @@
 #include <stdint.h>
 
 #define BB                      asm volatile ("xchg bx, bx")
+
 #define DISABLE_INTERRUPTS      asm volatile ("cli")
 #define ENABLE_INTERRUPTS       asm volatile ("sti")
-#define ENTER_IDLE              \
-    asm volatile (              \
-                    "sti;"      \
-                    "1:"        \
-                    "mov esp, 0xeffff0;"    \
-                    "hlt;"      \
-                    "jmp 1b;"   \
-                 )
+
 #define SYSTEM_HALT              \
     asm volatile (              \
                     "1:"        \

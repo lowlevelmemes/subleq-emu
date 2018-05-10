@@ -87,7 +87,7 @@ static int start_ap(uint8_t target_apic_id, int cpu_number) {
     sleep(10);
     /* Send the Startup IPI */
     lapic_write(APICREG_ICR1, ((uint32_t)target_apic_id) << 24);
-    lapic_write(APICREG_ICR0, 0x4600 | (uint32_t)trampoline);
+    lapic_write(APICREG_ICR0, 0x4600 | (uint32_t)(size_t)trampoline);
     /* wait 1ms */
     sleep(1);
     if (check_ap_flag()) {
@@ -95,7 +95,7 @@ static int start_ap(uint8_t target_apic_id, int cpu_number) {
     } else {
         /* Send the Startup IPI again */
         lapic_write(APICREG_ICR1, ((uint32_t)target_apic_id) << 24);
-        lapic_write(APICREG_ICR0, 0x4600 | (uint32_t)trampoline);
+        lapic_write(APICREG_ICR0, 0x4600 | (uint32_t)(size_t)trampoline);
         /* wait 1s */
         sleep(1000);
         if (check_ap_flag())

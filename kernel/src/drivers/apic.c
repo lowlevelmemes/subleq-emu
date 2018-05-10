@@ -20,13 +20,13 @@ void lapic_write(uint32_t reg, uint32_t val) {
 }
 
 uint32_t ioapic_read(size_t ioapic_num, uint32_t reg) {
-    volatile uint32_t *ioapic_base = (volatile uint32_t *)io_apics[ioapic_num]->addr;
+    volatile uint32_t *ioapic_base = (volatile uint32_t *)(size_t)io_apics[ioapic_num]->addr;
     *ioapic_base = reg;
     return *(ioapic_base + 4);
 }
 
 void ioapic_write(size_t ioapic_num, uint32_t reg, uint32_t val) {
-    volatile uint32_t *ioapic_base = (volatile uint32_t *)io_apics[ioapic_num]->addr;
+    volatile uint32_t *ioapic_base = (volatile uint32_t *)(size_t)io_apics[ioapic_num]->addr;
     *ioapic_base = reg;
     *(ioapic_base + 4) = val;
     return;

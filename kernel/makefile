@@ -11,6 +11,7 @@ INITRAMFS = initramfs
 
 CHARDFLAGS = -std=gnu99 -masm=intel \
     -mno-sse \
+    -mno-sse2 \
     -mno-red-zone \
     -nostdlib \
     -ffreestanding \
@@ -20,7 +21,7 @@ CLINKFLAGS = -nostdlib \
     -static-libgcc -lgcc \
     -T ./linker.ld
 
-CFLAGS = -Wall -O3
+CFLAGS = -Wall -O2
 
 subleq.bin: initramfs_obj.o $(BINS) $(OBJ) $(H_FILES)
 	$(CC) $(OBJ) initramfs_obj.o $(CLINKFLAGS) -o $@
@@ -38,5 +39,4 @@ initramfs_obj.o: $(INITRAMFS)
 	nasm $< -f elf64 -o $@
 
 clean:
-	rm -f $(OBJ) $(BINS) subleq.bin
-	rm -f initramfs.c initramfs_obj.o
+	rm -f $(OBJ) initramfs_obj.o $(BINS) subleq.bin
