@@ -76,13 +76,46 @@ void subleq_redraw_screen(void) {
     return;
 }
 
+static void get_cpu_name(char *str) {
+    asm volatile (
+        "mov eax, 0x80000002;"
+        "cpuid;"
+        "stosd;"
+        "mov eax, ebx;"
+        "stosd;"
+        "mov eax, ecx;"
+        "stosd;"
+        "mov eax, edx;"
+        "stosd;"
+        "mov eax, 0x80000003;"
+        "cpuid;"
+        "stosd;"
+        "mov eax, ebx;"
+        "stosd;"
+        "mov eax, ecx;"
+        "stosd;"
+        "mov eax, edx;"
+        "stosd;"
+        "mov eax, 0x80000004;"
+        "cpuid;"
+        "stosd;"
+        "mov eax, ebx;"
+        "stosd;"
+        :
+        : "D" (str)
+        : "rax", "rbx", "rcx", "rdx"
+    );
+
+    return;
+}
+
 void init_subleq(void) {
     zero_subleq_memory();
 
     dawn_framebuffer = (uint32_t *)&initramfs[256*1024*1024];
 
-    /* CPU id */
-    _strcpyram(335413288, "subleq-emu x86");
+    /* CPU name */
+    get_cpu_name((char *)(&initramfs[335413288]));
 
     /* display */
     _writeram(335540096, (uint64_t)vbe_width);
