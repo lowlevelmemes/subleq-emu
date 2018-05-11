@@ -1,12 +1,20 @@
 #ifndef __ACPI_H__
 #define __ACPI_H__
 
+#include <stdint.h>
+#include <stddef.h>
+
 typedef struct {
     char signature[8];
     uint8_t checksum;
     char oem_id[6];
     uint8_t rev;
     uint32_t rsdt_addr;
+    /* ver 2.0 only */
+    uint32_t length;
+    uint64_t xsdt_addr;
+    uint8_t ext_checksum;
+    uint8_t reserved[3];
 } __attribute__((packed)) rsdp_t;
 
 typedef struct {
@@ -25,6 +33,11 @@ typedef struct {
     acpi_sdt_t sdt;
     uint32_t sdt_ptr[];
 } __attribute__((packed)) rsdt_t;
+
+typedef struct {
+    acpi_sdt_t sdt;
+    uint64_t sdt_ptr[];
+} __attribute__((packed)) xsdt_t;
 
 typedef struct {
     acpi_sdt_t sdt;
@@ -72,6 +85,7 @@ typedef struct {
 
 extern rsdp_t *rsdp;
 extern rsdt_t *rsdt;
+extern xsdt_t *xsdt;
 extern madt_t *madt;
 
 extern local_apic_t *local_apics[];
@@ -88,5 +102,6 @@ extern size_t nmi_ptr;
 
 
 void init_acpi(void);
+void *acpi_find_sdt(const char *);
 
 #endif

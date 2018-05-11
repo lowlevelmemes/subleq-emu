@@ -7,7 +7,10 @@
 
 rsdp_t *rsdp;
 rsdt_t *rsdt;
+xsdt_t *xsdt;
 madt_t *madt;
+
+static int use_xsdt = 0;
 
 local_apic_t *local_apics[MAX_MADT];
 size_t local_apic_ptr = 0;
@@ -20,6 +23,32 @@ size_t iso_ptr = 0;
 
 nmi_t *nmis[MAX_MADT];
 size_t nmi_ptr = 0;
+
+/* Find SDT by signature */
+void *acpi_find_sdt(const char *signature) {
+    acpi_sdt_t *ptr;
+
+    if (use_xsdt) {
+        for (size_t i = 0; i < xsdt->sdt.length; i++) {
+            ptr = (acpi_sdt_t *)(size_t)xsdt->sdt_ptr[i];
+            if (!kstrncmp(ptr->signature, signature, 4)) {
+                kprint(KPRN_INFO, "acpi: Found \"%s\" at %x", signature, (uint32_t)(size_t)ptr);
+                return (void *)ptr;
+            }
+        }
+    } else {
+        for (size_t i = 0; i < rsdt->sdt.length; i++) {
+            ptr = (acpi_sdt_t *)(size_t)rsdt->sdt_ptr[i];
+            if (!kstrncmp(ptr->signature, signature, 4)) {
+                kprint(KPRN_INFO, "acpi: Found \"%s\" at %x", signature, (uint32_t)(size_t)ptr);
+                return (void *)ptr;
+            }
+        }
+    }
+
+    kprint(KPRN_INFO, "acpi: \"%s\" not found", signature);
+    return (void *)0;
+}
 
 void init_acpi(void) {
     kprint(KPRN_INFO, "ACPI: Initialising...");
@@ -41,20 +70,20 @@ void init_acpi(void) {
     panic("ACPI: RSDP table not found", 0);
 
 rsdp_found:
-    kprint(KPRN_INFO, "ACPI: Found RSDT at %x", rsdp->rsdt_addr);
-    rsdt = (rsdt_t *)(size_t)rsdp->rsdt_addr;
+    if (rsdp->rev >= 2 && rsdp->xsdt_addr) {
+        use_xsdt = 1;
+        kprint(KPRN_INFO, "acpi: Found XSDT at %x", (uint32_t)rsdp->xsdt_addr);
+        xsdt = (xsdt_t *)(size_t)rsdp->xsdt_addr;
+    } else {
+        kprint(KPRN_INFO, "acpi: Found RSDT at %x", (uint32_t)rsdp->rsdt_addr);
+        rsdt = (rsdt_t *)(size_t)rsdp->rsdt_addr;
+    }
 
     /* search for MADT table */
-    for (size_t i = 0; i < rsdt->sdt.length; i++) {
-        madt = (madt_t *)(size_t)rsdt->sdt_ptr[i];
-        if (!kstrncmp(madt->sdt.signature, "APIC", 4)) {
-            kprint(KPRN_INFO, "ACPI: Found MADT at %x", (size_t)madt);
-            goto madt_found;
-        }
-    }
-    panic("ACPI: MADT table not found", 0);
+    madt = acpi_find_sdt("APIC");
+    if (!madt)
+        panic("ACPI: MADT table not found", 0);
 
-madt_found:
     kprint(KPRN_INFO, "ACPI: Rev.: %u", madt->sdt.rev);
     kprint(KPRN_INFO, "ACPI: OEMID: %k", madt->sdt.oem_id, 6);
     kprint(KPRN_INFO, "ACPI: OEM table ID: %k", madt->sdt.oem_table_id, 8);
