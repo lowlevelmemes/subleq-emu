@@ -18,12 +18,14 @@
 %endmacro
 
 extern initramfs
+extern initramfs_end
 extern kernel_pagemap
 extern subleq_pagemap
 
 extern reboot
 extern shutdown
 
+global zero_subleq_memory
 global _readram
 global _writeram
 
@@ -153,6 +155,21 @@ subleq_cycle:
     pop rbp
     sti
 
+    ret
+
+zero_subleq_memory:
+    push rbx
+    push rbp
+
+    ; zero out subleq mem
+    mov rdi, initramfs_end
+    mov rcx, 0x1a000000
+    sub rcx, initramfs_end
+    mov rax, 0
+    rep stosb
+
+    pop rbp
+    pop rbx
     ret
 
 _readram:

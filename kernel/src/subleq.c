@@ -49,6 +49,8 @@ void subleq_redraw_screen(void) {
 }
 
 void init_subleq(void) {
+    zero_subleq_memory();
+
     dawn_framebuffer = (uint32_t *)&initramfs[256*1024*1024];
 
     /* CPU id */

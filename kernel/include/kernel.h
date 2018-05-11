@@ -10,7 +10,7 @@
 #define MAX_MADT 128
 
 
-//#define _KERNEL_DEBUG_OUTPUT_
+#define _KERNEL_DEBUG_OUTPUT_
 
 
 #endif

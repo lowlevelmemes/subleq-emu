@@ -11,6 +11,7 @@
 #include <subleq.h>
 #include <acpi.h>
 #include <apic.h>
+#include <e820.h>
 
 size_t memory_size;
 
@@ -29,7 +30,7 @@ void kernel_init(void) {
     load_IDT();
 
     /* detect memory */
-    memory_size = detect_mem();
+    init_e820();
     if (memory_size < 0x1f000000)
         panic("subleq-emu needs at least 500MiB of RAM to run.", memory_size);
 
@@ -64,10 +65,10 @@ void kernel_init(void) {
 
     /****** END OF EARLY BOOTSTRAP ******/
 
+    init_subleq();
     init_aps();
 
 
-    init_subleq();
 
     /* pass control to the emulator */
     subleq();

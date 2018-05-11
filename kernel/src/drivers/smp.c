@@ -35,8 +35,6 @@ void init_cpu0(void) {
     cpu_local_t *cpu_local = kalloc(sizeof(cpu_local_t));
     cpu_local->cpu_number = 0;
     cpu_local->kernel_stack = kernel_stack;
-    cpu_local->current_task = 0;
-    cpu_local->idle_cpu = 1;
 
     init_cpu0_local(cpu_local);
 
@@ -75,8 +73,6 @@ static int start_ap(uint8_t target_apic_id, int cpu_number) {
     cpu_local_t *cpu_local = kalloc(sizeof(cpu_local_t));
     cpu_local->cpu_number = cpu_number;
     cpu_local->kernel_stack = kernel_stack;
-    cpu_local->current_task = 0;
-    cpu_local->idle_cpu = 1;
 
     void *trampoline = prepare_smp_trampoline(ap_kernel_entry, &kernel_pagemap, kernel_stack, cpu_local);
 
