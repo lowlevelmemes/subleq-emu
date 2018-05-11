@@ -67,7 +67,7 @@ void kernel_init(void) {
 
     init_subleq();
     init_aps();
-
+    subleq_acquire_mem();
 
 
     /* pass control to the emulator */

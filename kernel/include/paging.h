@@ -11,7 +11,8 @@
 #define MEMORY_BASE             KERNEL_TOP
 
 /* arch specific values */
-#define PAGE_SIZE               4096
+#define PAGE_SIZE               0x200000
+#define PAGE_TABLE_ENTRIES      512
 
 
 void init_paging(void);
@@ -19,6 +20,10 @@ void init_paging(void);
 void full_identity_map(void);
 void *kmalloc(size_t);
 void kmfree(void *, size_t);
+
+typedef uint64_t pt_entry_t;
+
+void map_page(pt_entry_t *, size_t, size_t);
 
 
 #endif

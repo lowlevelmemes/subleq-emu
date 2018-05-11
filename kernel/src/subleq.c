@@ -2,6 +2,7 @@
 #include <stddef.h>
 #include <kernel.h>
 #include <graphics.h>
+#include <paging.h>
 #include <klib.h>
 #include <system.h>
 #include <subleq.h>
@@ -18,6 +19,33 @@ void _strcpyram(uint64_t dest, const char *mem) {
         initramfs[dest++] = mem[i];
 
     initramfs[dest] = 0;
+
+    return;
+}
+
+extern void *subleq_pagemap;
+
+void subleq_acquire_mem(void) {
+    size_t i;
+    uint64_t *lastptr = 0;
+
+    for (i = 0; ; i++) {
+        uint64_t *ptr = kmalloc(1);
+        if (!ptr)
+            break;
+        lastptr = ptr;
+        map_page((pt_entry_t *)&subleq_pagemap, (size_t)ptr, (size_t)0x1a000000 - (size_t)initramfs + i * PAGE_SIZE);
+        for (size_t j = 0; j < PAGE_SIZE / sizeof(uint64_t); j++)
+            ptr[j] = 0;
+    }
+
+    /* Add 8 KiB of gibberish because Dawn is great */
+    for (size_t i = 0; i < 8192 / sizeof(uint64_t); i++) {
+        size_t base = (PAGE_SIZE - 8192) / sizeof(uint64_t);
+        lastptr[base + i] = 0xffffffffffffffff;
+    }
+
+    kprint(KPRN_INFO, "subleq: Acquired %U 2 MiB pages.", i);
 
     return;
 }
