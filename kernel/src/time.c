@@ -19,13 +19,13 @@ void timer_interrupt(void) {
     /* raise vector 32 for all APs */
     lapic_write(APICREG_ICR0, 0x20 | (1 << 18) | (1 << 19));
 
-    poll_mouse();
-
     _writeram(335544304, _readram(335544304) + (0x100000000 / KRNL_PIT_FREQ));
 
-    if (!(uptime_raw % (KRNL_PIT_FREQ / 40))) {     /* 40 FPS */
+    if (!(uptime_raw % (KRNL_PIT_FREQ / MOUSE_POLL_FREQ)))
+        poll_mouse();
+
+    if (!(uptime_raw % (KRNL_PIT_FREQ / SCREEN_REFRESH_FREQ)))
         subleq_redraw_screen();
-    }
 
     return;
 }
