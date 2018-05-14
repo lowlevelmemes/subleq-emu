@@ -1,11 +1,12 @@
 #ifndef __KERNEL_H__
 #define __KERNEL_H__
 
+#define KERNEL_PHYS_OFFSET 0xffffffff00000000
 
 // misc tunables
 
 #define KRNL_PIT_FREQ 1000
-#define MOUSE_POLL_FREQ 120
+#define MOUSE_POLL_FREQ 80
 #define SCREEN_REFRESH_FREQ 30
 
 

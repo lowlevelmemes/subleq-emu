@@ -1,9 +1,3 @@
-extern map_PIC
-extern get_PIC0_mask
-extern get_PIC1_mask
-extern set_PIC0_mask
-extern set_PIC1_mask
-
 global real_routine
 
 section .data

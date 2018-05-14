@@ -7,14 +7,12 @@
 
 static void generic_exception(size_t error_code, size_t fault_rip, size_t fault_cs, const char *fault_name, const char *extra) {
 
-    kprint(KPRN_ERR, "%s occurred at: %x:%x", fault_name, fault_cs, fault_rip);
+    kprint(KPRN_ERR, "CPU %U: %s occurred at: %X:%X", get_cpu_number(), fault_name, fault_cs, fault_rip);
 
     if (extra)
         kprint(KPRN_ERR, "%s", extra);
 
-    kprint(KPRN_ERR, "Error code: %x", error_code);
-
-    panic("Exception occurred in kernel space.", error_code);
+    panic("Emulation cannot continue.", error_code);
 
 }
 

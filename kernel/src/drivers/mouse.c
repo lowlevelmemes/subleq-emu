@@ -198,4 +198,13 @@ void init_mouse(void) {
     //Enable the mouse
     mouse_write(0xF4);
     mouse_read();  //Acknowledge
+
+    port_out_b(0x64, 0x20);
+    port_out_b(0x80, 0x00);
+    uint8_t status = port_in_b(0x60);
+    status |= (1 << 1);
+    status &= ~(1 << 5);
+    port_out_b(0x64, 0x60);
+    port_out_b(0x80, 0x00);
+    port_out_b(0x60, status);
 }

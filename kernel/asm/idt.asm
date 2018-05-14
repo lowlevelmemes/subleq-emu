@@ -28,7 +28,9 @@ extern handler_virtualisation_exception
 extern handler_security_exception
 extern irq0_handler
 extern keyboard_isr
-extern syscall
+extern mouse_isr
+
+extern handler_wakeup
 
 section .data
 
@@ -57,13 +59,15 @@ make_entry:
     push rcx
     push rdx
     push rdi
+    push r8
 
     push rdx
 
     mov rax, 16
     and rdi, 0x0000FFFF
     mul rdi
-    add rax, IDT.IDTStart
+    mov r8, IDT.IDTStart
+    add rax, r8
     mov rdi, rax
 
     mov ax, bx
@@ -83,6 +87,7 @@ make_entry:
     xor eax, eax
     stosd
 
+    pop r8
     pop rdi
     pop rdx
     pop rcx
@@ -222,6 +227,7 @@ load_IDT:
     call make_entry
     
     inc di
+    mov rbx, mouse_isr
     call make_entry
     
     inc di
@@ -231,6 +237,14 @@ load_IDT:
     call make_entry
     
     inc di
+    call make_entry
+
+    mov di, 0x80
+    mov rbx, handler_wakeup
+    call make_entry
+
+    mov di, 0x81
+    mov rbx, handler_abort
     call make_entry
 
     mov di, 0xa0
@@ -310,11 +324,28 @@ load_IDT:
 
     mov di, 0xff
     call make_entry
+
+    mov di, 0x82
+    mov dl, 11101110b
+    mov rbx, handler_yield
+    call make_entry
     
-    lidt [IDT]
+    mov rbx, IDT
+    lidt [rbx]
     
     pop rdi
     pop rdx
     pop rcx
     pop rbx
     ret
+
+handler_abort:
+    cli
+    hlt
+    jmp handler_abort
+
+handler_yield:
+    sti
+    hlt
+    cli
+    iretq

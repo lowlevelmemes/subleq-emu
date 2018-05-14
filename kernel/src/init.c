@@ -56,9 +56,6 @@ void kernel_init(void) {
     /* initialise APIC */
     init_apic();
 
-    /* init CPU 0 */
-    init_cpu0();
-
     /* enable interrupts for the first time */
     kprint(KPRN_INFO, "INIT: ENABLE INTERRUPTS");
     ENABLE_INTERRUPTS;
@@ -66,7 +63,7 @@ void kernel_init(void) {
     /****** END OF EARLY BOOTSTRAP ******/
 
     init_subleq();
-    init_aps();
+    init_smp();
     subleq_acquire_mem();
 
 

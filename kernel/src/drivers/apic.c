@@ -9,24 +9,24 @@
 /** contains pieces of code from https://nemez.net/osdev, credits to Nemes **/
 
 uint32_t lapic_read(uint32_t reg) {
-    size_t lapic_base = (size_t)madt->local_controller_addr;
+    size_t lapic_base = (size_t)madt->local_controller_addr + KERNEL_PHYS_OFFSET;
     return *((volatile uint32_t *)(lapic_base + reg));
 }
 
 void lapic_write(uint32_t reg, uint32_t val) {
-    size_t lapic_base = (size_t)madt->local_controller_addr;
+    size_t lapic_base = (size_t)madt->local_controller_addr + KERNEL_PHYS_OFFSET;
     *((volatile uint32_t *)(lapic_base + reg)) = val;
     return;
 }
 
 uint32_t ioapic_read(size_t ioapic_num, uint32_t reg) {
-    volatile uint32_t *ioapic_base = (volatile uint32_t *)(size_t)io_apics[ioapic_num]->addr;
+    volatile uint32_t *ioapic_base = (volatile uint32_t *)((size_t)io_apics[ioapic_num]->addr + KERNEL_PHYS_OFFSET);
     *ioapic_base = reg;
     return *(ioapic_base + 4);
 }
 
 void ioapic_write(size_t ioapic_num, uint32_t reg, uint32_t val) {
-    volatile uint32_t *ioapic_base = (volatile uint32_t *)(size_t)io_apics[ioapic_num]->addr;
+    volatile uint32_t *ioapic_base = (volatile uint32_t *)((size_t)io_apics[ioapic_num]->addr + KERNEL_PHYS_OFFSET);
     *ioapic_base = reg;
     *(ioapic_base + 4) = val;
     return;
@@ -110,6 +110,16 @@ irq0_found:
     /* install keyboard redirect (IRQ 1) */
     ioapic_redirect(1, 1, 0, local_apics[0]->apic_id);
 irq1_found:
+    /* install IRQ 12 ISO */
+    for (size_t i = 0; i < iso_ptr; i++) {
+        if (isos[i]->irq_source == 12) {
+            ioapic_redirect(isos[i]->irq_source, isos[i]->gsi, isos[i]->flags, local_apics[0]->apic_id);
+            goto irq12_found;
+        }
+    }
+    /* install mouse redirect (IRQ 12) */
+    ioapic_redirect(12, 12, 0, local_apics[0]->apic_id);
+irq12_found:
     return;
 }
 

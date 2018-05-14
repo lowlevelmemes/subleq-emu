@@ -25,5 +25,8 @@ typedef uint64_t pt_entry_t;
 
 void map_page(pt_entry_t *, size_t, size_t);
 
+extern void *kernel_pagemap[];
+extern void *subleq_pagemap[];
+
 
 #endif

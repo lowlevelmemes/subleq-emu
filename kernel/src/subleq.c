@@ -23,8 +23,6 @@ void _strcpyram(uint64_t dest, const char *mem) {
     return;
 }
 
-extern void *subleq_pagemap;
-
 void subleq_acquire_mem(void) {
     size_t i;
     uint64_t *lastptr = 0;
@@ -34,7 +32,7 @@ void subleq_acquire_mem(void) {
         if (!ptr)
             break;
         lastptr = ptr;
-        map_page((pt_entry_t *)&subleq_pagemap, (size_t)ptr, (size_t)0x1a000000 - (size_t)initramfs + i * PAGE_SIZE);
+        map_page((pt_entry_t *)subleq_pagemap, (size_t)ptr, (size_t)0x1a000000 - (size_t)initramfs + i * PAGE_SIZE);
         for (size_t j = 0; j < PAGE_SIZE / sizeof(uint64_t); j++)
             ptr[j] = 0;
     }
@@ -113,6 +111,8 @@ void init_subleq(void) {
     zero_subleq_memory();
 
     dawn_framebuffer = (uint32_t *)&initramfs[256*1024*1024];
+
+    dawn_framebuffer = (uint32_t *)((size_t)dawn_framebuffer + KERNEL_PHYS_OFFSET);
 
     /* CPU name */
     get_cpu_name((char *)(&initramfs[335413288]));

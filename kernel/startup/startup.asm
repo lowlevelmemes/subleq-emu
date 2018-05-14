@@ -5,15 +5,20 @@
 
 extern kernel_init
 extern initramfs
+extern kstack.top
 global startup
 global kernel_pagemap
 global subleq_pagemap
+global load_tss
+
+%define kernel_phys_offset 0xffffffff00000000
 
 section .data
 
 align 4096
 
-kernel_pagemap:
+kernel_pagemap equ kernel_pagemap_t - kernel_phys_offset
+kernel_pagemap_t:
 .pml4:
     times 512 dq 0
 
@@ -35,7 +40,8 @@ kernel_pagemap:
 
 align 4096
 
-subleq_pagemap:
+subleq_pagemap equ subleq_pagemap_t - kernel_phys_offset
+subleq_pagemap_t:
 .pml4:
     times 512 dq 0
 
@@ -56,7 +62,13 @@ align 16
 GDT:
 
 dw .GDTEnd - .GDTStart - 1	; GDT size
-dd .GDTStart				; GDT start
+dq .GDTStart				; GDT start
+
+align 16
+.GDT_ptrlow:
+
+dw .GDTEnd - .GDTStart - 1	; GDT size
+dd .GDTStart - kernel_phys_offset	; GDT start
 
 align 16
 .GDTStart:
@@ -132,7 +144,56 @@ db 10010010b		; Access
 db 10001111b		; Granularity
 db 0x00				; Base (high 8 bits)
 
+; tss
+.tss:
+    dw 104              ; tss length
+  .tss_low:
+    dw 0
+  .tss_mid:
+    db 0
+  .tss_flags1:
+    db 10001001b
+  .tss_flags2:
+    db 00000000b
+  .tss_high:
+    db 0
+  .tss_upper32:
+    dd 0
+  .tss_reserved:
+    dd 0
+
 .GDTEnd:
+
+section .text
+
+bits 64
+
+load_tss:
+    ; addr in RDI
+    push rbx
+    mov eax, edi
+    mov rbx, GDT.tss_low
+    mov word [rbx], ax
+    mov eax, edi
+    and eax, 0xff0000
+    shr eax, 16
+    mov rbx, GDT.tss_mid
+    mov byte [rbx], al
+    mov eax, edi
+    and eax, 0xff000000
+    shr eax, 24
+    mov rbx, GDT.tss_high
+    mov byte [rbx], al
+    mov rax, rdi
+    shr rax, 32
+    mov rbx, GDT.tss_upper32
+    mov dword [rbx], eax
+    mov rbx, GDT.tss_flags1
+    mov byte [rbx], 10001001b
+    mov rbx, GDT.tss_flags2
+    mov byte [rbx], 0
+    pop rbx
+    ret
 
 section .startup
 
@@ -140,7 +201,7 @@ bits 32
 
 nolongmode:
     call clearscreen
-    mov esi, .msg
+    mov esi, .msg - kernel_phys_offset
     call textmodeprint
     .halt:
         cli
@@ -184,11 +245,12 @@ startup:
     jz nolongmode
 
     ; load the GDT
-    lgdt [GDT]
+    mov ebx, GDT.GDT_ptrlow - kernel_phys_offset
+    lgdt [ebx]
 
-    mov edi, subleq_pagemap.pd
+    mov edi, subleq_pagemap_t.pd - kernel_phys_offset
     mov eax, initramfs
-    or eax, 0x03 | (1 << 7)
+    or eax, 0x07 | (1 << 7)
     mov ecx, 512 * 4
     .loop0:
         stosd
@@ -197,44 +259,44 @@ startup:
         add edi, 4
         loop .loop0
 
-    mov edi, subleq_pagemap.pdpt_low
-    mov eax, subleq_pagemap.pd1
-    or eax, 0x03
+    mov edi, subleq_pagemap_t.pdpt_low - kernel_phys_offset
+    mov eax, subleq_pagemap_t.pd1 - kernel_phys_offset
+    or eax, 0x07
     stosd
     xor eax, eax
     stosd
-    mov eax, subleq_pagemap.pd2
-    or eax, 0x03
+    mov eax, subleq_pagemap_t.pd2 - kernel_phys_offset
+    or eax, 0x07
     stosd
     xor eax, eax
     stosd
-    mov eax, subleq_pagemap.pd3
-    or eax, 0x03
+    mov eax, subleq_pagemap_t.pd3 - kernel_phys_offset
+    or eax, 0x07
     stosd
     xor eax, eax
     stosd
-    mov eax, subleq_pagemap.pd4
-    or eax, 0x03
-    stosd
-    xor eax, eax
-    stosd
-
-    mov edi, subleq_pagemap.pml4
-    mov eax, subleq_pagemap.pdpt_low
-    or eax, 0x03
+    mov eax, subleq_pagemap_t.pd4 - kernel_phys_offset
+    or eax, 0x07
     stosd
     xor eax, eax
     stosd
 
-    mov edi, subleq_pagemap.pml4+(511*8)
-    mov eax, kernel_pagemap.pdpt_hi
-    or eax, 0x03
+    mov edi, subleq_pagemap_t.pml4 - kernel_phys_offset
+    mov eax, subleq_pagemap_t.pdpt_low - kernel_phys_offset
+    or eax, 0x07
     stosd
     xor eax, eax
     stosd
 
-    mov edi, kernel_pagemap.pd
-    mov eax, 0x03 | (1 << 7)
+    mov edi, subleq_pagemap_t.pml4+(511*8) - kernel_phys_offset
+    mov eax, kernel_pagemap_t.pdpt_hi - kernel_phys_offset
+    or eax, 0x07
+    stosd
+    xor eax, eax
+    stosd
+
+    mov edi, kernel_pagemap_t.pd - kernel_phys_offset
+    mov eax, 0x07 | (1 << 7)
     mov ecx, 512 * 4
     .loop1:
         stosd
@@ -243,60 +305,60 @@ startup:
         add edi, 4
         loop .loop1
 
-    mov edi, kernel_pagemap.pdpt_low
-    mov eax, kernel_pagemap.pd1
-    or eax, 0x03
+    mov edi, kernel_pagemap_t.pdpt_low - kernel_phys_offset
+    mov eax, kernel_pagemap_t.pd1 - kernel_phys_offset
+    or eax, 0x07
     stosd
     xor eax, eax
     stosd
-    mov eax, kernel_pagemap.pd2
-    or eax, 0x03
+    mov eax, kernel_pagemap_t.pd2 - kernel_phys_offset
+    or eax, 0x07
     stosd
     xor eax, eax
     stosd
-    mov eax, kernel_pagemap.pd3
-    or eax, 0x03
+    mov eax, kernel_pagemap_t.pd3 - kernel_phys_offset
+    or eax, 0x07
     stosd
     xor eax, eax
     stosd
-    mov eax, kernel_pagemap.pd4
-    or eax, 0x03
-    stosd
-    xor eax, eax
-    stosd
-
-    mov edi, kernel_pagemap.pdpt_hi+(508*8)
-    mov eax, kernel_pagemap.pd1
-    or eax, 0x03
-    stosd
-    xor eax, eax
-    stosd
-    mov eax, kernel_pagemap.pd2
-    or eax, 0x03
-    stosd
-    xor eax, eax
-    stosd
-    mov eax, kernel_pagemap.pd3
-    or eax, 0x03
-    stosd
-    xor eax, eax
-    stosd
-    mov eax, kernel_pagemap.pd4
-    or eax, 0x03
+    mov eax, kernel_pagemap_t.pd4 - kernel_phys_offset
+    or eax, 0x07
     stosd
     xor eax, eax
     stosd
 
-    mov edi, kernel_pagemap.pml4
-    mov eax, kernel_pagemap.pdpt_low
-    or eax, 0x03
+    mov edi, kernel_pagemap_t.pdpt_hi+(508*8) - kernel_phys_offset
+    mov eax, kernel_pagemap_t.pd1 - kernel_phys_offset
+    or eax, 0x07
+    stosd
+    xor eax, eax
+    stosd
+    mov eax, kernel_pagemap_t.pd2 - kernel_phys_offset
+    or eax, 0x07
+    stosd
+    xor eax, eax
+    stosd
+    mov eax, kernel_pagemap_t.pd3 - kernel_phys_offset
+    or eax, 0x07
+    stosd
+    xor eax, eax
+    stosd
+    mov eax, kernel_pagemap_t.pd4 - kernel_phys_offset
+    or eax, 0x07
     stosd
     xor eax, eax
     stosd
 
-    mov edi, kernel_pagemap.pml4+(511*8)
-    mov eax, kernel_pagemap.pdpt_hi
-    or eax, 0x03
+    mov edi, kernel_pagemap_t.pml4 - kernel_phys_offset
+    mov eax, kernel_pagemap_t.pdpt_low - kernel_phys_offset
+    or eax, 0x07
+    stosd
+    xor eax, eax
+    stosd
+
+    mov edi, kernel_pagemap_t.pml4+(511*8) - kernel_phys_offset
+    mov eax, kernel_pagemap_t.pdpt_hi - kernel_phys_offset
+    or eax, 0x07
     stosd
     xor eax, eax
     stosd
@@ -304,7 +366,7 @@ startup:
     mov edx, kernel_pagemap
     mov cr3, edx
 
-    mov eax, 10100000b
+    mov eax, 00100000b
     mov cr4, eax
 
     mov ecx, 0xc0000080
@@ -317,7 +379,7 @@ startup:
     or eax, 0x80000000
     mov cr0, eax
 
-    jmp 0x08:.mode64
+    jmp 0x08:.mode64 - kernel_phys_offset
     .mode64:
     bits 64
     mov ax, 0x10
@@ -327,13 +389,13 @@ startup:
     mov gs, ax
     mov ss, ax
 
-    ; enable SSE
-    mov rax, cr0
-    and al, 0xfb
-    or al, 0x02
-    mov cr0, rax
-    mov rax, cr4
-    or ax, 3 << 9
-    mov cr4, rax
+    mov rax, .higher_half
+    jmp rax
+  .higher_half:
+    mov rsp, kstack.top
 
-    call kernel_init
+    mov rbx, GDT
+    lgdt [rbx]
+
+    mov rax, kernel_init
+    call rax

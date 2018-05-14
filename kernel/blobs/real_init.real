@@ -10,14 +10,11 @@ mov dword [arg], ebx
 ; Save lmode IDT
 sidt [lmode_idt]
 
-; Load real mode IDT
-lidt [real_idt]
-
 ; Save lmode GDT
 sgdt [lmode_gdt]
 
-; save fx state
-fxsave [fxstate]
+; Load real mode IDT
+lidt [real_idt]
 
 ; save cr3
 mov rax, cr3
@@ -44,20 +41,12 @@ mov eax, cr0
 and eax, 01111111111111111111111111111110b
 mov cr0, eax
 
-; Disable MP bit
-and al, 0xfd
-mov cr0, eax
-
 ; leave long mode
 mov ecx, 0xc0000080
 rdmsr
 
 and eax, 0xfffffeff
 wrmsr
-
-; disable SSE and stuff
-xor eax, eax
-mov cr4, eax
 
 ; Load real mode segments
 jmp 0x0000:real_mode
@@ -77,22 +66,18 @@ mov ebx, dword [arg]
 ; Call actual routine
 call 0x8000
 
+; Load intermediate bootstrap GDT
+lgdt [gdt_ptr]
+
 ; load cr3
 mov eax, dword [cr3_reg]
 mov cr3, eax
-
-; prepare long mode
-mov eax, 10100000b
-mov cr4, eax
 
 mov ecx, 0xc0000080
 rdmsr
 
 or eax, 0x00000100
 wrmsr
-
-; load long mode GDT
-lgdt [lmode_gdt]
 
 ; Enter long mode
 mov eax, cr0
@@ -113,17 +98,8 @@ mov ss, ax
 ; Load lmode IDT
 lidt [lmode_idt]
 
-; enable SSE again
-mov rax, cr0
-and al, 0xfb
-or al, 0x02
-mov cr0, rax
-mov rax, cr4
-or ax, 3 << 9
-mov cr4, rax
-
-; restore fx state
-fxrstor [fxstate]
+; Load lmode GDT
+lgdt [lmode_gdt]
 
 ; Restore stack
 mov rsp, qword [saved_stack]
@@ -132,10 +108,6 @@ mov rsp, qword [saved_stack]
 ret
 
 data:
-
-align 16
-fxstate:
-    times 512 db 0
 
 align 4
 lmode_idt:
@@ -155,3 +127,40 @@ lmode_gdt:
 arg dd 0
 cr3_reg dd 0
 saved_stack dq 0
+
+align 16
+
+gdt_ptr:
+    dw .gdt_end - .gdt_start - 1  ; GDT size
+    dq .gdt_start                 ; GDT start
+
+align 16
+.gdt_start:
+
+; Null descriptor (required)
+.null_descriptor:
+    dw 0x0000           ; Limit
+    dw 0x0000           ; Base (low 16 bits)
+    db 0x00             ; Base (mid 8 bits)
+    db 00000000b        ; Access
+    db 00000000b        ; Granularity
+    db 0x00             ; Base (high 8 bits)
+
+; 64 bit mode kernel
+.kernel_code_64:
+    dw 0x0000           ; Limit
+    dw 0x0000           ; Base (low 16 bits)
+    db 0x00             ; Base (mid 8 bits)
+    db 10011010b        ; Access
+    db 00100000b        ; Granularity
+    db 0x00             ; Base (high 8 bits)
+
+.kernel_data:
+    dw 0x0000           ; Limit
+    dw 0x0000           ; Base (low 16 bits)
+    db 0x00             ; Base (mid 8 bits)
+    db 10010010b        ; Access
+    db 00000000b        ; Granularity
+    db 0x00             ; Base (high 8 bits)
+
+.gdt_end:

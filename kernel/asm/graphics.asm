@@ -5,6 +5,8 @@ global get_vbe_mode_info
 global set_vbe_mode
 global dump_vga_font
 
+%define kernel_phys_offset 0xffffffff00000000
+
 section .data
 
 %define get_vbe_info_size           get_vbe_info_end - get_vbe_info_bin
@@ -37,6 +39,8 @@ get_vbe_info:
     push r15
 
     mov rbx, rdi
+    mov rdi, kernel_phys_offset
+    sub rbx, rdi
     mov rsi, get_vbe_info_bin
     mov rcx, get_vbe_info_size
     call real_routine
@@ -59,6 +63,8 @@ get_vbe_mode_info:
     push r15
 
     mov rbx, rdi
+    mov rdi, kernel_phys_offset
+    sub rbx, rdi
     mov rsi, get_vbe_mode_info_bin
     mov rcx, get_vbe_mode_info_size
     call real_routine
@@ -103,6 +109,8 @@ dump_vga_font:
     push r15
 
     mov rbx, rdi
+    mov rdi, kernel_phys_offset
+    sub rbx, rdi
     mov rsi, dump_vga_font_bin
     mov rcx, dump_vga_font_size
     call real_routine

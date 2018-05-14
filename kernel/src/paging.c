@@ -134,8 +134,6 @@ void init_pmm(void) {
     return;
 }
 
-extern void *kernel_pagemap;
-
 void init_vmm(void) {
     kprint(KPRN_INFO, "vmm: Identity mapping memory as specified by the e820...");
 
@@ -146,7 +144,7 @@ void init_vmm(void) {
             if (addr < 0x100000000)
                 continue;
 
-            map_page((pt_entry_t *)&kernel_pagemap, addr, addr);
+            map_page((pt_entry_t *)kernel_pagemap, addr, addr);
         }
     }
 
@@ -176,7 +174,7 @@ void map_page(pt_entry_t *pml4, size_t phys_addr, size_t virt_addr) {
         }
 
         /* Present + writable + user (0b111) */
-        pml4[pml4_entry] = (pt_entry_t)pdpt | 0b111;
+        pml4[pml4_entry] = (pt_entry_t)pdpt | 0x07;
     }
 
     /* Rinse and repeat */
@@ -193,12 +191,12 @@ void map_page(pt_entry_t *pml4, size_t phys_addr, size_t virt_addr) {
         }
 
         /* Present + writable + user (0b111) */
-        pdpt[pdpt_entry] = (pt_entry_t)pd | 0b111;
+        pdpt[pdpt_entry] = (pt_entry_t)pd | 0x07;
     }
 
     /* Set the entry as present and point it to the passed physical address */
     /* Also set the specified flags */
-    pd[pd_entry] = (pt_entry_t)(phys_addr | (0x03 | (1 << 7)));
+    pd[pd_entry] = (pt_entry_t)(phys_addr | (0x07 | (1 << 7)));
     return;
 }
 

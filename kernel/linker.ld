@@ -3,20 +3,20 @@ ENTRY(_start)
 
 SECTIONS
 {
-    . = 1M;
+    . = 0xffffffff00000000 + 0x100000;
 
     .text ALIGN(4K) :
     {
-        sections_text = .;
+        sections_text = . - 0xffffffff00000000;
         *(.multiboot)
         *(.startup)
         *(.text)
-        sections_text_end = .;
+        sections_text_end = . - 0xffffffff00000000;
     }
 
     .data ALIGN(4K) :
     {
-        sections_data = .;
+        sections_data = . - 0xffffffff00000000;
         *(.data)
         *(.rodata)
         *(COMMON)
@@ -25,9 +25,9 @@ SECTIONS
 
     .initramfs ALIGN(2M) :
     {
-        initramfs = .;
+        initramfs = . - 0xffffffff00000000;
         *(.initramfs)
-        initramfs_end = .;
-        sections_data_end = .;
+        initramfs_end = . - 0xffffffff00000000;
+        sections_data_end = . - 0xffffffff00000000;
     }
 }
