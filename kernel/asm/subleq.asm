@@ -104,9 +104,9 @@ subleq:
         align 16
       .jump_table1:
         times 8 dq .execute_cycle
-        dq shutdown
+        dq .shutdown
         times 7 dq .execute_cycle
-        dq reboot
+        dq .reboot
 
     .execute_cycle:
         ; eip = subleq_cycle(eip);
@@ -149,6 +149,12 @@ subleq:
         mov r9, 1               ; is_halted = 1;
         int 0x82                ; yield
         jmp .loop_allcpu               ; continue;
+
+    .shutdown:
+        int 0x83
+
+    .reboot:
+        int 0x84
 
 zero_subleq_memory:
     push rbx

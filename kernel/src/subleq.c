@@ -7,6 +7,45 @@
 #include <system.h>
 #include <subleq.h>
 #include <mouse.h>
+#include <panic.h>
+
+typedef struct {
+    uint64_t io_loc;
+    uint64_t value;
+    int tries;
+} io_stack_t;
+
+io_stack_t io_stack[4096];
+int io_stack_ptr = 0;
+
+void subleq_io_write(uint64_t io_loc, uint64_t value) {
+    io_stack[io_stack_ptr].io_loc = io_loc;
+    io_stack[io_stack_ptr].value = value;
+    io_stack[io_stack_ptr].tries = 0;
+    io_stack_ptr++;
+    if (io_stack_ptr == 1024)
+        panic("io_stack overflow", 0);
+
+    return;
+}
+
+void subleq_io_flush(void) {
+
+    while (io_stack_ptr) {
+        if (!_readram(io_stack[0].io_loc) || io_stack[0].tries == 10) {
+            _writeram(io_stack[0].io_loc, io_stack[0].value);
+            for (size_t j = 1; j < io_stack_ptr; j++) {
+                io_stack[j - 1] = io_stack[j];
+            }
+            io_stack_ptr--;
+        } else {
+            io_stack[0].tries++;
+            break;
+        }
+    }
+
+    return;
+}
 
 static volatile uint64_t last_frame_counter = 0;
 

@@ -329,6 +329,14 @@ load_IDT:
     mov dl, 11101110b
     mov rbx, handler_yield
     call make_entry
+
+    mov di, 0x83
+    mov rbx, handler_shutdown
+    call make_entry
+
+    mov di, 0x84
+    mov rbx, handler_reboot
+    call make_entry
     
     mov rbx, IDT
     lidt [rbx]
@@ -338,6 +346,14 @@ load_IDT:
     pop rcx
     pop rbx
     ret
+
+extern reboot
+handler_reboot:
+    call reboot
+
+extern shutdown
+handler_shutdown:
+    call shutdown
 
 handler_abort:
     cli

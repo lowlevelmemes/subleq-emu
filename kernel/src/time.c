@@ -23,6 +23,8 @@ void timer_interrupt(void) {
 
     _writeram(335544304, _readram(335544304) + (0x100000000 / KRNL_PIT_FREQ));
 
+    subleq_io_flush();
+
     if (cpu_count == 1)
         if (!(uptime_raw % (KRNL_PIT_FREQ / SCREEN_REFRESH_FREQ)))
             subleq_redraw_screen();

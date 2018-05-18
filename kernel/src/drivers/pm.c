@@ -2,11 +2,16 @@
 #include <kernel.h>
 #include <klib.h>
 #include <cio.h>
+#include <acpi.h>
 
 void shutdown(void) {
     asm volatile ("cli");
 
     kprint(KPRN_INFO, "PM: shutdown request");
+
+    port_out_w((uint16_t)facp->PM1a_CNT_BLK, SLP_TYPa | (1 << 13));
+    if (facp->PM1b_CNT_BLK)
+        port_out_w((uint16_t)facp->PM1b_CNT_BLK, SLP_TYPb | (1 << 13));
 
     for (;;) { asm volatile ("hlt"); }
 }

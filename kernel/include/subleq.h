@@ -4,6 +4,8 @@
 #include <stdint.h>
 
 void subleq(void);
+void subleq_io_flush(void);
+void subleq_io_write(uint64_t, uint64_t);
 void zero_subleq_memory(void);
 void subleq_acquire_mem(void);
 uint64_t _readram(uint64_t);

@@ -9,6 +9,7 @@ rsdp_t *rsdp;
 rsdt_t *rsdt;
 xsdt_t *xsdt;
 madt_t *madt;
+facp_t *facp;
 
 static int use_xsdt = 0;
 
@@ -23,6 +24,9 @@ size_t iso_ptr = 0;
 
 nmi_t *nmis[MAX_MADT];
 size_t nmi_ptr = 0;
+
+uint16_t SLP_TYPa;
+uint16_t SLP_TYPb;
 
 /* Find SDT by signature */
 void *acpi_find_sdt(const char *signature) {
@@ -118,6 +122,39 @@ rsdp_found:
                 break;
         }
     }
+
+    facp = acpi_find_sdt("FACP");
+
+    char *dsdt_ptr = (char *)(size_t)facp->dsdt + 36 + KERNEL_PHYS_OFFSET;
+    size_t dsdt_len = *((uint32_t *)((size_t)facp->dsdt + 4 + KERNEL_PHYS_OFFSET)) - 36;
+
+    kprint(0, "DSDT_PTR = %X", dsdt_ptr);
+    kprint(0, "DSDT_LEN = %X", dsdt_len);
+
+    size_t s5_addr = 0;
+    for (size_t i = 0; i < dsdt_len; i++) {
+        if (!kstrncmp(&dsdt_ptr[i], "_S5_", 4)) {
+            s5_addr = (size_t)&dsdt_ptr[i];
+            goto s5_found;
+        }
+    }
+    panic("s5 not found", 0);
+
+s5_found:
+    kprint(0, "s5_addr = %X", s5_addr);
+
+    s5_addr += 5;
+    s5_addr += ((*((uint8_t *)s5_addr) & 0xc0) >> 6) + 2;
+
+    if (*(uint8_t *)s5_addr == 0x0a)
+        s5_addr++;
+    SLP_TYPa = (uint16_t)(*((uint8_t *)s5_addr)) << 10;
+    s5_addr++;
+
+    if (*(uint8_t *)s5_addr == 0x0a)
+        s5_addr++;
+    SLP_TYPb = (uint16_t)(*((uint8_t *)s5_addr)) << 10;
+    s5_addr++;
 
     return;
 

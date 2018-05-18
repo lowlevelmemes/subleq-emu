@@ -129,19 +129,19 @@ void poll_mouse(void) {
         packet.y_mov = port_in_b(0x60);
 
         if (packet.flags & (1 << 0))
-            _writeram(335542176 + 0 * 8, 0x100000000);
+            subleq_io_write(335542176 + 0 * 8, 0x100000000);
         else
-            _writeram(335542176 + 0 * 8, 0);
+            subleq_io_write(335542176 + 0 * 8, 0);
 
         if (packet.flags & (1 << 1))
-            _writeram(335542176 + 1 * 8, 0x100000000);
+            subleq_io_write(335542176 + 1 * 8, 0x100000000);
         else
-            _writeram(335542176 + 1 * 8, 0);
+            subleq_io_write(335542176 + 1 * 8, 0);
 
         if (packet.flags & (1 << 2))
-            _writeram(335542176 + 2 * 8, 0x100000000);
+            subleq_io_write(335542176 + 2 * 8, 0x100000000);
         else
-            _writeram(335542176 + 2 * 8, 0);
+            subleq_io_write(335542176 + 2 * 8, 0);
 
         if (packet.flags & (1 << 4))
             x_mov = (int8_t)packet.x_mov;
@@ -174,8 +174,8 @@ void poll_mouse(void) {
 
         put_mouse_cursor();
 
-        _writeram(335542176 + 6 * 8, scale_position(0, vbe_width, 0, 0x100000000, mouse_x));
-        _writeram(335542176 + 7 * 8, scale_position(0, vbe_height, 0, 0x100000000, mouse_y));
+        subleq_io_write(335542176 + 6 * 8, scale_position(0, vbe_width, 0, 0x100000000, mouse_x));
+        subleq_io_write(335542176 + 7 * 8, scale_position(0, vbe_height, 0, 0x100000000, mouse_y));
 
     }
 
