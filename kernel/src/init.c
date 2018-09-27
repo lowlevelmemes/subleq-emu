@@ -18,6 +18,21 @@ size_t memory_size;
 void get_time(int *seconds, int *minutes, int *hours,
               int *days, int *months, int *years);
 
+uint64_t get_jdn(int days, int months, int years) {
+    return (1461 * (years + 4800 + (months - 14)/12))/4 + (367 * (months - 2 - 12 * ((months - 14)/12)))/12 - (3 * ((years + 4900 + (months - 14)/12)/100))/4 + days - 32075;
+}
+
+uint64_t get_dawn_epoch(int seconds, int minutes, int hours,
+                        int days, int months, int years) {
+
+    uint64_t jdn_current = get_jdn(days, months, years);
+    uint64_t jdn_2016 = get_jdn(1, 1, 2016);
+
+    uint64_t jdn_diff = jdn_current - jdn_2016;
+
+    return (jdn_diff * (60 * 60 * 24)) + hours*3600 + minutes*60 + seconds;
+}
+
 void kernel_init(void) {
     /* interrupts disabled */
 
@@ -52,6 +67,9 @@ void kernel_init(void) {
     get_time(&seconds, &minutes, &hours, &days, &months, &years);
     kprint(KPRN_INFO, "Current time: %u/%u/%u %u:%u:%u", years, months, days, hours, minutes, seconds);
 
+    uint64_t dawn_epoch = get_dawn_epoch(seconds, minutes, hours, days, months, years);
+    kprint(KPRN_INFO, "Dawn epoch: %U", dawn_epoch);
+
     init_mouse();
 
     /* set PIT frequency */
@@ -70,6 +88,9 @@ void kernel_init(void) {
     /****** END OF EARLY BOOTSTRAP ******/
 
     init_subleq();
+
+    /* set the date to current time */
+    _writeram(335544304, (dawn_epoch + uptime_sec) * 0x100000000);
 
     /* pass control to the emulator */
     subleq();
