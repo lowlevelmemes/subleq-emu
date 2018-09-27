@@ -6,12 +6,10 @@ Quick readme on how to build:
   - get a x86_64-elf gcc+binutils toolchain and add it to your path
     google is your friend
 
-  - get nasm, grub, and xorriso
+  - get nasm
 
-  - get the latest Dawn ZIP from http://gerigeri.uw.hu/DawnOS/download.html
-    extract it
-    run:
-    head -c 268435456 [path_to_dawn]/disk0.bin > [path_to_repo]/kernel/initramfs
+  - get the latest Dawn ZIP from http://gerigeri.uw.hu/dawn.zip
+    extract and move the Dawn directory to the root of the repo
 
   - run "make" in the root of the repository tree
 

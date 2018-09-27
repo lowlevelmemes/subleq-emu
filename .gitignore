@@ -1,7 +1,6 @@
 **/*.o
 **/*.bin
-**/*.iso
-**/*.iso.xz
+**/*.img
+**/*.img.xz
 dawn.zip
 Dawn
-kernel/initramfs
