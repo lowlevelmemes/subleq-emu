@@ -15,6 +15,9 @@
 
 size_t memory_size;
 
+void get_time(int *seconds, int *minutes, int *hours,
+              int *days, int *months, int *years);
+
 void kernel_init(void) {
     /* interrupts disabled */
 
@@ -44,6 +47,10 @@ void kernel_init(void) {
 
     /* initialise graphics mode */
     init_graphics();
+
+    int hours, minutes, seconds, days, months, years;
+    get_time(&seconds, &minutes, &hours, &days, &months, &years);
+    kprint(KPRN_INFO, "Current time: %u/%u/%u %u:%u:%u", years, months, days, hours, minutes, seconds);
 
     init_mouse();
 

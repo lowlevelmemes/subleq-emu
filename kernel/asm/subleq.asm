@@ -19,23 +19,13 @@
 
 extern initramfs
 extern initramfs_end
-extern kernel_pagemap
 extern subleq_pagemap
-
-extern reboot
-extern shutdown
 
 global zero_subleq_memory
 global _readram
 global _writeram
 
-global initramfs_addr
-
 %define kernel_phys_offset 0xffffffff00000000
-
-section .data
-initramfs_addr:
-    dq initramfs
 
 section .text
 
