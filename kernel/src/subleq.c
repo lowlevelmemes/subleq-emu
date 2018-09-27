@@ -8,6 +8,9 @@
 #include <subleq.h>
 #include <mouse.h>
 #include <panic.h>
+#include <smp.h>
+
+int subleq_ready = 0;
 
 typedef struct {
     uint64_t io_loc;
@@ -161,6 +164,12 @@ void init_subleq(void) {
     _writeram(335540096 + 8, (uint64_t)vbe_height);
     _writeram(335540096 + 16, (uint64_t)32);
     _writeram(335540096 + 24, (uint64_t)2);
+
+    subleq_acquire_mem();
+
+    init_smp();
+
+    subleq_ready = 1;
 
     return;
 }

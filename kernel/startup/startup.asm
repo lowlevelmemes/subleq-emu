@@ -4,8 +4,8 @@
 ; long mode, then it should call 'kernel_init'.
 
 extern kernel_init
-extern initramfs
 extern kstack.top
+extern initramfs
 global startup
 global kernel_pagemap
 global subleq_pagemap
@@ -13,50 +13,52 @@ global load_tss
 
 %define kernel_phys_offset 0xffffffff00000000
 
-section .data
+section .bss
 
 align 4096
 
 kernel_pagemap equ kernel_pagemap_t - kernel_phys_offset
 kernel_pagemap_t:
 .pml4:
-    times 512 dq 0
+    resq 512
 
 .pdpt_low:
-    times 512 dq 0
+    resq 512
 
 .pdpt_hi:
-    times 512 dq 0
+    resq 512
 
 .pd:
     .pd1:
-    times 512 dq 0
+    resq 512
     .pd2:
-    times 512 dq 0
+    resq 512
     .pd3:
-    times 512 dq 0
+    resq 512
     .pd4:
-    times 512 dq 0
+    resq 512
 
 align 4096
 
 subleq_pagemap equ subleq_pagemap_t - kernel_phys_offset
 subleq_pagemap_t:
 .pml4:
-    times 512 dq 0
+    resq 512
 
 .pdpt_low:
-    times 512 dq 0
+    resq 512
 
 .pd:
     .pd1:
-    times 512 dq 0
+    resq 512
     .pd2:
-    times 512 dq 0
+    resq 512
     .pd3:
-    times 512 dq 0
+    resq 512
     .pd4:
-    times 512 dq 0
+    resq 512
+
+section .data
 
 align 16
 GDT:

@@ -11,6 +11,12 @@ bits 32
 
 section .multiboot
 legacy_skip_header:
+    mov ecx, sections_bss_end
+    sub ecx, sections_data_end
+    mov edi, sections_data_end
+    xor eax, eax
+    rep stosb
+
     mov eax, _start - kernel_phys_offset
     jmp eax
 
@@ -22,14 +28,14 @@ multiboot_header:
     .header_addr dd multiboot_header - kernel_phys_offset
     .load_addr dd sections_text
     .load_end_addr dd sections_data_end
-    .bss_end_addr dd sections_data_end
+    .bss_end_addr dd sections_bss_end
     .entry_addr dd _start - kernel_phys_offset
 
-section .data
+section .bss
 
 align 16
 kstack:
-    times 0x10000 db 0
+    resb 0x10000
 .top:
 
 section .text

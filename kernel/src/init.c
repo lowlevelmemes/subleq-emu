@@ -63,9 +63,6 @@ void kernel_init(void) {
     /****** END OF EARLY BOOTSTRAP ******/
 
     init_subleq();
-    init_smp();
-    subleq_acquire_mem();
-
 
     /* pass control to the emulator */
     subleq();

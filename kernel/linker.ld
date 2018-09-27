@@ -5,29 +5,30 @@ SECTIONS
 {
     . = 0xffffffff00000000 + 0x100000;
 
+    initramfs = 0x200000;
+    initramfs_end = (0x200000 + 256*1024*1024);
+
     .text ALIGN(4K) :
     {
         sections_text = . - 0xffffffff00000000;
-        *(.multiboot)
-        *(.startup)
-        *(.text)
+        KEEP(*(.multiboot))
+        KEEP(*(.startup))
+        KEEP(*(.text))
         sections_text_end = . - 0xffffffff00000000;
     }
 
     .data ALIGN(4K) :
     {
         sections_data = . - 0xffffffff00000000;
-        *(.data)
-        *(.rodata)
-        *(COMMON)
-        *(.bss)
+        KEEP(*(.data))
+        KEEP(*(.rodata))
+        sections_data_end = . - 0xffffffff00000000;
     }
 
-    .initramfs ALIGN(2M) :
+    .bss ALIGN(4K) :
     {
-        initramfs = . - 0xffffffff00000000;
-        *(.initramfs)
-        initramfs_end = . - 0xffffffff00000000;
-        sections_data_end = . - 0xffffffff00000000;
+        KEEP(*(.bss))
+        KEEP(*(COMMON))
+        sections_bss_end = . - 0xffffffff00000000;
     }
 }

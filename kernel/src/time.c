@@ -18,16 +18,20 @@ void timer_interrupt(void) {
     if (!(++uptime_raw % KRNL_PIT_FREQ))
         uptime_sec++;
 
-    /* raise vector 0x80 for all APs */
-    lapic_write(APICREG_ICR0, 0x80 | (1 << 18) | (1 << 19));
+    if (subleq_ready) {
 
-    _writeram(335544304, _readram(335544304) + (0x100000000 / KRNL_PIT_FREQ));
+        /* raise vector 0x80 for all APs */
+        lapic_write(APICREG_ICR0, 0x80 | (1 << 18) | (1 << 19));
 
-    subleq_io_flush();
+        _writeram(335544304, _readram(335544304) + (0x100000000 / KRNL_PIT_FREQ));
 
-    if (cpu_count == 1)
-        if (!(uptime_raw % (KRNL_PIT_FREQ / SCREEN_REFRESH_FREQ)))
-            subleq_redraw_screen();
+        subleq_io_flush();
+
+        if (cpu_count == 1)
+            if (!(uptime_raw % (KRNL_PIT_FREQ / SCREEN_REFRESH_FREQ)))
+                subleq_redraw_screen();
+
+    }
 
     return;
 }

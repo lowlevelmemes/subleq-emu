@@ -16,4 +16,6 @@ void subleq_redraw_screen(void);
 
 extern void *initramfs_addr;
 
+extern int subleq_ready;
+
 #endif
