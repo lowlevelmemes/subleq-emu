@@ -44,7 +44,6 @@ mov ax, 0x10
 mov ds, ax
 mov es, ax
 mov ss, ax
-mov ax, 0x23
 mov fs, ax
 mov gs, ax
 
@@ -60,7 +59,7 @@ mov edx, dword [0x560+4]
 wrmsr
 
 ; Load TSS
-mov ax, 0x38
+mov ax, 0x28
 ltr ax
 
 ; jump to entry point
@@ -99,23 +98,6 @@ align 16
     dw 0x0000           ; Base (low 16 bits)
     db 0x00             ; Base (mid 8 bits)
     db 10010010b        ; Access
-    db 00000000b        ; Granularity
-    db 0x00             ; Base (high 8 bits)
-
-; Null descriptor (alignment)
-.null_descriptor_align:
-    dw 0x0000           ; Limit
-    dw 0x0000           ; Base (low 16 bits)
-    db 0x00             ; Base (mid 8 bits)
-    db 00000000b        ; Access
-    db 00000000b        ; Granularity
-    db 0x00             ; Base (high 8 bits)
-
-.user_data_64:
-    dw 0x0000           ; Limit
-    dw 0x0000           ; Base (low 16 bits)
-    db 0x00             ; Base (mid 8 bits)
-    db 11110010b        ; Access
     db 00000000b        ; Granularity
     db 0x00             ; Base (high 8 bits)
 

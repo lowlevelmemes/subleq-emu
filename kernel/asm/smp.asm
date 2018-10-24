@@ -57,9 +57,6 @@ check_ap_flag:
 
 init_cpu0_local:
     ; Load FS with the CPU local struct base address
-    mov ax, 0x23
-    mov fs, ax
-    mov gs, ax
     mov rcx, 0xc0000100
     mov eax, edi
     shr rdi, 32
@@ -69,7 +66,7 @@ init_cpu0_local:
     mov rdi, rsi
     call load_tss
 
-    mov ax, 0x38
+    mov ax, 0x28
     ltr ax
 
     ret

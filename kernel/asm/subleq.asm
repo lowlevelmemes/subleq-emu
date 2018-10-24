@@ -20,6 +20,8 @@
 extern initramfs
 extern initramfs_end
 extern subleq_pagemap
+extern shutdown
+extern reboot
 
 global zero_subleq_memory
 global _readram
@@ -33,25 +35,10 @@ bits 64
 
 global subleq
 subleq:
-    cli
-
     mov rax, subleq_pagemap
     mov cr3, rax
 
-    ; switch to ring 3
-    mov ax, 0x23
-    mov ds, ax
-    mov es, ax
-    push 0x23
-    push 0
-    push 0x202
-    push 0x1b
-    mov rax, .ring3
-    push rax
-    iretq
-
-  .ring3:
-    ;xor rsp, rsp       ; uint64_t eip = 0;
+    xor rsp, rsp       ; uint64_t eip = 0;
     mov r9, 1           ; int is_halted = 1;
 
     mov r10, 334364672  ; uint64_t cpu_bank;
@@ -94,9 +81,9 @@ subleq:
         align 16
       .jump_table1:
         times 8 dq .execute_cycle
-        dq .shutdown
+        dq shutdown
         times 7 dq .execute_cycle
-        dq .reboot
+        dq reboot
 
     .execute_cycle:
         ; eip = subleq_cycle(eip);
@@ -137,14 +124,8 @@ subleq:
         .case4:
         ; halted
         mov r9, 1               ; is_halted = 1;
-        int 0x82                ; yield
+        hlt                     ; halt
         jmp .loop_allcpu               ; continue;
-
-    .shutdown:
-        int 0x83
-
-    .reboot:
-        int 0x84
 
 zero_subleq_memory:
     push rbx

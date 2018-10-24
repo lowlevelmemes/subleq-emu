@@ -1,0 +1,219 @@
+Dawn hardware platform overview
+
+
+The goal of this platform was to offer a system that is simple enough to be manufactured by any corporation or
+individual person in any nation. The platform uses a SUBLEQ cpu that have no instruction set, only a fix operation
+(substract and jump if result is less or equal to 0). The CPU is 64 bit, the hardwares should be placed beetwhen
+the 256 mbyte and 320 mbyte locations. The hardware supports almost unlimit number of CPU cores, 2^63 RAM, 2^63 disks.
+Platform supports a 8 channel sound system, up to 4 joysticks. The hardware not implements MMU, IRQ-s, DMA, or any
+system controller hardware to keep the things extremely simple, small and cheap.
+
+
+
+
+
+The CPU:
+-----------------
+
+
+64 bit big-endian SUBLEQ CPU. The opcodes are stored in ABC format, and they operate in the folowing way (pseudocode):
+
+long long A=GET_64_BIT_DATA(eip);
+long long B=GET_64_BIT_DATA(eip+8);
+long long C=GET_64_BIT_DATA(eip+16);
+long long value_of_b=GET_64_BIT_DATA(B)-GET_64_BIT_DATA(A);
+STORE_64_BIT_DATA(value_of_b, B);
+if(value_of_b<=0){
+ eip=C;
+}else{
+ eip+=24;
+}
+
+The instruction uses fixed memory addresses. 
+On multicore systems, EIP should be stored and CPU controlling methods are used too:
+CPU control area begin from memory address 334364672 to address 335413248.
+Each CPU core have a 16 byte (2 long long) control bank starting from CPU 0. First 8 byte means the CPU state 
+(0: no cpu, 1: runs, 2: stop requested, 4: stopped). If a stop request is being writed, the hardware should write 4 after it succesfully
+stopped the core. Second bank store the EIP for each core. 
+The CPU state changes can be requested even approx a million times per cycle. 
+When the CPU is being stopped or started, the cache memory should be
+synced, and the EIP should be saved to the second 8 byte. On system start, only the 0. CPU starts
+the rest will have status 4. 
+CPU-s usually being handled in the same time. If the 0. CPU is disabled (8 being written to the control memory)
+then the system shuts down. If 16 is being written, the system reboots.
+
+Control bank and eip only will be written by the CPU cores itself, and the kernel from the CPU0.
+
+Hardware access is only manditory on the 0. CPU. 
+
+Memory address 334364664 (long long) can specify to the system, how much clock it takes to stop/start
+the CPU-s. If not specified, kernel will assume ~1000 clock cycle.
+
+Memory address 335413288 stores the CPU name, maximum 40 byte. This should be prescisely filled with the 
+manufacturer name and the model/type, for example: \"YourCorp YourCPU3 /8 Ghz/64 Core\"
+In emulators, it must be filled with the host hardware CPU name and model, and NOT just only with the emulator name! 
+
+Creating Dawn optimized CPU-s (for speed):
+-If you want to add cache to your CPU, add 2 kbyte cache at least, becouse the temporary-value calculation in the compiler is optimized for more than half kbyte of level 1 cache. 
+-A thread typically will run for a few tousand of cycles, the minimum ideal l2 cache size is 8 kbyte * core number.
+-In-order superscalar designs will scale efficiently up to 2 or 3 pipeline. Out of order design scalability limits is not yet known, the theocretical maximum is 20 pipeline.
+-In practice, you should chase high ghz-s. Since the cores are built from few and simple transistors, you can do this. 
+-Strict cache coherency beethwen the CPU cores are not mandatory, it can be delayed, but disabling/enabling the cores always must properly sync it.
+-Disabling and enabling a CPU core must be very fast, it could be done millions of times per seconds, as fast as the kernel can work. 
+-BUT: Usually, all cores are enabled/disabled in the same time almost simultanously and in asynchron mode. They dont need to be disabled immediately, you can sync them for a few hundred cycle if you want. The kernel will wait a bit, but after a while, they will mark the core as inactive, and you really should avoid this!
+-The first core will be allocated to the kernel. Add at least 8 cores for efficient operation. Of course one-core implementations will work too. 
+-Core0 can be a bit stronger than the others. Virtual and weaker CPU cores should be at the end of the cpu list, stronger cores should be come first. 
+
+Dawn supports hot-pluging for cpus with the folowing limitations:
+-If cpu from Socket0 is removed, the kernel will stall until you place the cpu back.
+-You must place back the cpus to sockets, becouse the sheduler will operate incorrectly in these cases, causing stall in random threads and processes.
+-You can use cpus from any manufacturers and any speed (if - of course - your hardware implementation allows this) - but the kernel will always display the primary system CPU name.
+
+How many CPU cores Dawn can handle?
+-262144*2^63. Dawn can handle 262144 cpus by default, and if that is not enough, then starts to use pages to adress more of them. This behavior was not yet tested - no hardware to do it - so probably will not work yet.
+If more cpu is needed, There is a banking address at memory 335413256. The operating system will write the number of the CPU bank here to access processors in the next bank, the hardware
+should write the same value to 335413262 when its succesfully mapped the new cpu bank to the addresses beginning from 334364672 again. 
+
+
+
+
+
+Time:
+---------
+Timer is placed on memory address 335544304 (unsigned long long). Installing timer is not manditory to run the operating system, but it is stronly recommended to have. 
+Without timer, the sound and input handling will not be proper. Ideally, the timer have a precisity at least 2-3 microsecond. 2^32 means one second. 0 means 2016 january 1.
+Memory address 335544300 (uint32) is also assigned for the timer, in the case of the timer overflows, so the timer is basically a 80-bit number. 
+
+
+Sound:
+------
+The sound card begins on memory address 335544116, signed 64 bit integer data for each output channels (8*8 byte total). The next 8*8 byte is the sound input (microphones, line in, etc).
+
+
+Keyboard:
+---------
+Keyboard data accepted at memory address 335542256 (long long). Unicode characters are accepted here directly. There are special keycodes, those are the folowing:
+1 = Main Button
+2 = Home
+3 = End
+4 = crtl+left
+5 = Quit (AltF4)
+6 = Shutdown
+7 = crtl+right
+8 = Backspace
+9: PgUp
+10: PgDown
+11: Shift+Home
+12: Shift+End
+13 = Enter key 
+14 = Up
+15 = Left
+16 = Down
+17 = Right
+18: Shift+Up
+19: Shift+Left
+20 = Shift+Down
+21 = Shift+Right
+22 = Paste
+23 = Cut
+24 = crtl+alt+del / alt-tab
+25 = Copy
+26 = Shift+Crtl+Home
+27 = Escape key
+28 = Shift+Crtl+End
+29 = Del
+30 = Off button (software)
+31 = Everything to taskbar
+191 = Find
+192 = Printscreen
+The OS deletes the memory address, after it copyed out the character value. No dedicated keyboard controller chip is required, typematic and release functions handled by the OS. 
+
+Mouse:
+------
+Mouse data starts from memory location 335542176, where first is the left click (long long, 2^32 means one kilograms), right click (long long, 2^32 means one kilograms), 
+middle click (long long, 2^32 means one kilograms), relative movement x (long long, 2^32 means one pixel) relative movement y (long long, 2^32 means one pixel), 
+touchscreen or absolute mouse movement x and y (two long long data, 0,0 means left upper corner, 2^32,2^32 means right lower corner), power of the touch (long long, 
+2^32 means one kilogram, left click still should be signaled separately on regular mouse data location), and finally a long long variable for the up/down wheel (-1: up, 1: down).
+All value is erased by the kernel once it reads them. Multitouch is supported, but the softwares must also support it by being able to rely on pressure packets.
+No dedicated touch hardware or DSP is needed, touched locations can loaded randomly or in order each after each after the previous has been readed out.
+
+
+Joystick:
+---------
+Joyistkc memory address is at 335538080, where it having 5 xy direction (5*2*64 bit signed number each, where 2^32 means ONE), and 20 buttons (64-bit numbers, where 2^32
+means ONE). After this, the next joystick memory location begins, the data order is the same. Maximum 4 joystick is supported. 
+Joystick force feedback memory location begins from 335539040, where it can have the same 5 xy direction (5*2*64 bit signed number each, where 2^32 means ONE), and 20 
+buttons. This first 960 byte specifies the locations, the next 960 byte specifies the force, 2^32 means one kilogram.
+
+
+
+
+Display:
+-------
+Video memory starts from the memory location 256 mbyte. It can have up maximum 33554448 byte, and can be RGB or RGBA (transparent displays are supported). 
+Memory address 335540096 specify the resolution (8 byte for width, 8 byte for height, 8 byte for color depth (24 or 32)). 
+Then 8 byte that indicates if the frame buffer not need to be refreshed in every cycle (1). If this indicator is 2, and the 
+depth was 32 bit, it will signal the OS that it can write directly to frame buffer without flickering or access issues.
+Then, a 8 byte frame number counter, which is incrased by the operating system 
+after a frame is rendered for proper sync. Then the display refresh hz is coming (8 byte). Resolution x and y, and display hz can set by the hardware any time. 
+It can be set by the operating system too, but this is not manditory. If all of these parameters are 0, kernel will assume 1024x512 display with 24 bit.
+Last 8 byte indicates the screen off state. If value is 1, the screen is turned off, if its 0, the screen is on. 
+If the fix 32 mbyte of RAM is too few, the video memory can be paged at a 8 byte long long memory address: 335413272. The operating system will write the number of
+the VGA bank here to access the next 33554448 byte of video memory in the next bank, the hardware should write the same value to 335413280when its succesfully mapped 
+the new video memory bank sized 32 mbyte again. 
+
+Network send:
+-------------
+Antenna sending address is 335413336, begining with an one-byte indicator that specifies if something is one the buffer to be sent (1), or not (0).
+After the hardware sends the data, must clear this location with 0. After this, the data package is folowing:
+A 8 bit integer as sum of the whole package bytes prepared to send: data, sender, receiver coordinates (every byte). 
+Then 24 bit data for sending location X, 24 bit for sending location Y, 24 bit for target location X, 24 bit for target location Y, and finally the actual data (64 bit). 
+
+The same order applies for receiving data packets, those begin from the address 335413400, and being cleared by the OS after the packet is processed. 
+On memory addres 335413592 (long long) there is the signal distance of the antenna in meters. This should be contain the real maximum, and not the theocretical.
+
+Location system:
+---------------
+Compass is at memory address 335413664 (3 long long value) contains the x, y, and z angle of the device.
+Satelite receiver and barometer is at 335413632 (3 long long value) contains the x, y surface locations, the format is what the system is internally using for 
+networking. The last long long value is the height in meters.
+Accelerometer is at 335413600, (3 long long value) 
+
+
+
+Webcamera:
+----------
+Webcamera datas begin from the memory address 334313440. 16 separate webcameras can exist in the system, the data is the folowing for each one (one after one).
+Data format is the folowing: 64 bit width, 64 bit height, 64 bit is for the selected memory bank of the webcam, which must be copyed to the next 64 bit location if the bank
+switch is being complete. After this, there is a 2 kbyte of data bank, which is the actual pixel data (rgb). 
+
+
+Free ports:
+-----------
+From memory address 334309344 there is a 4 kbyte data range for your own hardware devices. This is the area where you can connect your own hardware and hardwares.
+This area will never be touched by the operating system. 
+
+
+Hardware boot sequences and BIOS:
+----------------------------------
+A 256 kbyte memory area begining from the address 334047200 is reserved for the hardware manufacturer. This can contain the boot sequence of the motherboard if needed,
+or any other things the hardware developer wants here. Please beware that in the case of a malfunctioning software overwrites this area, it should not cause the 
+damage of the hardware itself. 
+
+
+Battery:
+--------
+A 64 bit number at 334047192 memory address indicates the battery charge level. Only the last 8 byte is used, however: 0 means no charge, 255 means full charge. 
+The charge level will not affect the operating system behaviour, it only displays it on the screen. Do not update this more than once per minute.
+
+
+
+Disks:
+---------------------
+At the memory location 334361440 the disk devices are located. The system supports up to 100 disk drives.
+Each disk drive has 3 x 8 byte control location: the first 8 byte indicates the readed data (generally, disks returns
+only one byte, and the first 7 byte is zero, but high performance disks can return up to 7 bytes in reverse order),
+the second 8 byte indicates the location. The last 8 byte indicates the disk command:(0=no disk, 1=initial value, 2=read disk, 4=write to disk, 3= finished reading, 5=finished writing).
+On error, the readed data should be -1.
+";
+

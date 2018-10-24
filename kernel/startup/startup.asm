@@ -4,7 +4,6 @@
 ; long mode, then it should call 'kernel_init'.
 
 extern kernel_init
-extern kstack.top
 extern initramfs
 global startup
 global kernel_pagemap
@@ -14,6 +13,11 @@ global load_tss
 %define kernel_phys_offset 0xffffffff00000000
 
 section .bss
+
+align 16
+kstack:
+    resb 0x10000
+.top:
 
 align 4096
 
@@ -86,7 +90,7 @@ db 00000000b		; Access
 db 00000000b		; Granularity
 db 0x00				; Base (high 8 bits)
 
-; Protected mode
+; 64 bit mode
 
 .KernelCode64:
 
@@ -103,26 +107,6 @@ dw 0x0000			; Limit
 dw 0x0000			; Base (low 16 bits)
 db 0x00				; Base (mid 8 bits)
 db 10010010b		; Access
-db 00000000b		; Granularity
-db 0x00				; Base (high 8 bits)
-
-; Protected mode
-
-.UserCode64:
-
-dw 0x0000			; Limit
-dw 0x0000			; Base (low 16 bits)
-db 0x00				; Base (mid 8 bits)
-db 11111010b		; Access
-db 00100000b		; Granularity
-db 0x00				; Base (high 8 bits)
-
-.UserData64:
-
-dw 0x0000			; Limit
-dw 0x0000			; Base (low 16 bits)
-db 0x00				; Base (mid 8 bits)
-db 11110010b		; Access
 db 00000000b		; Granularity
 db 0x00				; Base (high 8 bits)
 
@@ -197,8 +181,6 @@ load_tss:
     pop rbx
     ret
 
-section .startup
-
 bits 32
 
 nolongmode:
@@ -210,7 +192,11 @@ nolongmode:
         hlt
         jmp .halt
 
+section .data
+
 .msg    db  "This CPU does not support long mode.", 0
+
+section .text
 
 textmodeprint:
     pusha
@@ -238,6 +224,8 @@ clearscreen:
     ret
 
 startup:
+    mov esp, kstack.top - kernel_phys_offset
+
     ; check if long mode is present
     mov eax, 0x80000001
     xor edx, edx
@@ -252,7 +240,7 @@ startup:
 
     mov edi, subleq_pagemap_t.pd - kernel_phys_offset
     mov eax, initramfs
-    or eax, 0x07 | (1 << 7)
+    or eax, 0x03 | (1 << 7)
     mov ecx, 512 * 4
     .loop0:
         stosd
@@ -263,42 +251,42 @@ startup:
 
     mov edi, subleq_pagemap_t.pdpt_low - kernel_phys_offset
     mov eax, subleq_pagemap_t.pd1 - kernel_phys_offset
-    or eax, 0x07
+    or eax, 0x03
     stosd
     xor eax, eax
     stosd
     mov eax, subleq_pagemap_t.pd2 - kernel_phys_offset
-    or eax, 0x07
+    or eax, 0x03
     stosd
     xor eax, eax
     stosd
     mov eax, subleq_pagemap_t.pd3 - kernel_phys_offset
-    or eax, 0x07
+    or eax, 0x03
     stosd
     xor eax, eax
     stosd
     mov eax, subleq_pagemap_t.pd4 - kernel_phys_offset
-    or eax, 0x07
+    or eax, 0x03
     stosd
     xor eax, eax
     stosd
 
     mov edi, subleq_pagemap_t.pml4 - kernel_phys_offset
     mov eax, subleq_pagemap_t.pdpt_low - kernel_phys_offset
-    or eax, 0x07
+    or eax, 0x03
     stosd
     xor eax, eax
     stosd
 
     mov edi, subleq_pagemap_t.pml4+(511*8) - kernel_phys_offset
     mov eax, kernel_pagemap_t.pdpt_hi - kernel_phys_offset
-    or eax, 0x07
+    or eax, 0x03
     stosd
     xor eax, eax
     stosd
 
     mov edi, kernel_pagemap_t.pd - kernel_phys_offset
-    mov eax, 0x07 | (1 << 7)
+    mov eax, 0x03 | (1 << 7)
     mov ecx, 512 * 4
     .loop1:
         stosd
@@ -309,58 +297,58 @@ startup:
 
     mov edi, kernel_pagemap_t.pdpt_low - kernel_phys_offset
     mov eax, kernel_pagemap_t.pd1 - kernel_phys_offset
-    or eax, 0x07
+    or eax, 0x03
     stosd
     xor eax, eax
     stosd
     mov eax, kernel_pagemap_t.pd2 - kernel_phys_offset
-    or eax, 0x07
+    or eax, 0x03
     stosd
     xor eax, eax
     stosd
     mov eax, kernel_pagemap_t.pd3 - kernel_phys_offset
-    or eax, 0x07
+    or eax, 0x03
     stosd
     xor eax, eax
     stosd
     mov eax, kernel_pagemap_t.pd4 - kernel_phys_offset
-    or eax, 0x07
+    or eax, 0x03
     stosd
     xor eax, eax
     stosd
 
     mov edi, kernel_pagemap_t.pdpt_hi+(508*8) - kernel_phys_offset
     mov eax, kernel_pagemap_t.pd1 - kernel_phys_offset
-    or eax, 0x07
+    or eax, 0x03
     stosd
     xor eax, eax
     stosd
     mov eax, kernel_pagemap_t.pd2 - kernel_phys_offset
-    or eax, 0x07
+    or eax, 0x03
     stosd
     xor eax, eax
     stosd
     mov eax, kernel_pagemap_t.pd3 - kernel_phys_offset
-    or eax, 0x07
+    or eax, 0x03
     stosd
     xor eax, eax
     stosd
     mov eax, kernel_pagemap_t.pd4 - kernel_phys_offset
-    or eax, 0x07
+    or eax, 0x03
     stosd
     xor eax, eax
     stosd
 
     mov edi, kernel_pagemap_t.pml4 - kernel_phys_offset
     mov eax, kernel_pagemap_t.pdpt_low - kernel_phys_offset
-    or eax, 0x07
+    or eax, 0x03
     stosd
     xor eax, eax
     stosd
 
     mov edi, kernel_pagemap_t.pml4+(511*8) - kernel_phys_offset
     mov eax, kernel_pagemap_t.pdpt_hi - kernel_phys_offset
-    or eax, 0x07
+    or eax, 0x03
     stosd
     xor eax, eax
     stosd
@@ -382,7 +370,7 @@ startup:
     mov cr0, eax
 
     jmp 0x08:.mode64 - kernel_phys_offset
-    .mode64:
+  .mode64:
     bits 64
     mov ax, 0x10
     mov ds, ax

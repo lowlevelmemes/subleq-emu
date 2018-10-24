@@ -15,9 +15,20 @@
 int cpu_count = 1;
 
 typedef struct {
-    uint32_t unused __attribute__((aligned(16)));
-    uint64_t sp;
-    uint32_t entries[23];
+    uint32_t unused0 __attribute__((aligned(16)));
+    uint64_t rsp0;
+    uint64_t rsp1;
+    uint64_t rsp2;
+    uint64_t unused1;
+    uint64_t ist1;
+    uint64_t ist2;
+    uint64_t ist3;
+    uint64_t ist4;
+    uint64_t ist5;
+    uint64_t ist6;
+    uint64_t ist7;
+    uint64_t unused2;
+    uint32_t iopb_offset;
 } __attribute__((packed)) tss_t;
 
 typedef struct {
@@ -25,6 +36,7 @@ typedef struct {
 } cpu_stack_t;
 
 static cpu_stack_t cpu_stacks[MAX_CPUS];
+static cpu_stack_t cpu_int_stacks[MAX_CPUS];
 static cpu_local_t cpu_locals[MAX_CPUS];
 static tss_t cpu_tss[MAX_CPUS] __attribute__((aligned(16)));
 
@@ -57,7 +69,8 @@ static int start_ap(uint8_t target_apic_id, int cpu_number) {
     /* prepare TSS */
     tss_t *tss = &cpu_tss[cpu_number];
 
-    tss->sp = (uint64_t)(&cpu_stacks[cpu_number]);
+    tss->rsp0 = (uint64_t)(&cpu_stacks[cpu_number]);
+    tss->ist1 = (uint64_t)(&cpu_int_stacks[cpu_number]);
 
     void *trampoline = prepare_smp_trampoline((void *)ap_kernel_entry, (void *)kernel_pagemap,
                                 &cpu_stacks[cpu_number], cpu_local, tss);
@@ -100,7 +113,8 @@ static void init_cpu0(void) {
 
     tss_t *tss = &cpu_tss[0];
 
-    tss->sp = (uint64_t)(&cpu_stacks[0]);
+    tss->rsp0 = (uint64_t)(&cpu_stacks[0]);
+    tss->ist1 = (uint64_t)(&cpu_int_stacks[0]);
 
     init_cpu0_local(cpu_local, tss);
 
@@ -110,6 +124,8 @@ static void init_cpu0(void) {
 void init_smp(void) {
     /* prepare CPU 0 first */
     init_cpu0();
+
+    asm volatile ("sti");
 
     /* start up the APs and jump them into the kernel */
     for (size_t i = 1; i < local_apic_ptr; i++) {

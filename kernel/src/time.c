@@ -27,6 +27,9 @@ void timer_interrupt(void) {
 
         subleq_io_flush();
 
+        if (!(uptime_raw % (KRNL_PIT_FREQ / 50)))
+            mouse_update();
+
         if (cpu_count == 1)
             if (!(uptime_raw % (KRNL_PIT_FREQ / SCREEN_REFRESH_FREQ)))
                 subleq_redraw_screen();

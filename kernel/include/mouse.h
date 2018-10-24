@@ -2,7 +2,7 @@
 #define __MOUSE_H__
 
 void put_mouse_cursor(void);
-void poll_mouse(void);
+void mouse_update(void);
 void init_mouse(void);
 
 #endif

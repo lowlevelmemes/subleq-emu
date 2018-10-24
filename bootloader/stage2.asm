@@ -82,7 +82,7 @@ call simple_print
 mov ax, 128						; Start from LBA sector 128
 push 0x0
 pop es
-mov ebx, 0x200000
+mov ebx, 0x1000000
 mov ecx, ((256*1024*1024)/512)
 call read_sectors
 

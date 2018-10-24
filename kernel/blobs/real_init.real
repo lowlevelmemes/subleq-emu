@@ -25,11 +25,11 @@ jmp far dword [ptr16]
 
 ptr16:
 dd pmode16
-dw 0x28
+dw 0x18
 
 pmode16:
 bits 16
-mov ax, 0x30
+mov ax, 0x20
 mov ds, ax
 mov es, ax
 mov ss, ax

@@ -52,6 +52,7 @@ make_entry:
 ; RBX = address
 ; CX = selector
 ; DL = type
+; DH = IST
 ; DI = vector
 
     push rax
@@ -74,8 +75,9 @@ make_entry:
     stosw
     mov ax, cx
     stosw
-    inc rdi
     pop rdx
+    mov al, dh
+    stosb
     mov al, dl
     stosb
     shr rbx, 16
@@ -100,9 +102,10 @@ load_IDT:
     push rcx
     push rdx
     push rdi
-    
+
     xor di, di
     mov dl, 10001110b
+    mov dh, 1
     mov cx, 0x08
     mov rbx, handler_div0
     call make_entry                 ; int 0x00, divide by 0
@@ -110,132 +113,132 @@ load_IDT:
     inc di
     mov rbx, handler_debug
     call make_entry                 ; int 0x01, debug
-    
+
     inc di
     mov rbx, handler_nmi
     call make_entry                 ; int 0x02, NMI
-    
+
     inc di
     mov rbx, handler_breakpoint
     call make_entry                 ; int 0x03, breakpoint
-    
+
     inc di
     mov rbx, handler_overflow
     call make_entry                 ; int 0x04, overflow
-    
+
     inc di
     mov rbx, handler_bound_range_exceeded
     call make_entry                 ; int 0x05, bound range exceeded
-    
+
     inc di
     mov rbx, handler_invalid_opcode
     call make_entry                 ; int 0x06, invalid opcode
-    
+
     inc di
     mov rbx, handler_device_not_available
     call make_entry                 ; int 0x07, device not available
-    
+
     inc di
     mov rbx, handler_double_fault
     call make_entry                 ; int 0x08, double fault
-    
+
     inc di
     mov rbx, handler_coprocessor_segment_overrun
     call make_entry                 ; int 0x09, coprocessor segment overrun
-    
+
     inc di
     mov rbx, handler_invalid_tss
     call make_entry                 ; int 0x0A, invalid TSS
-    
+
     inc di
     mov rbx, handler_segment_not_present
     call make_entry                 ; int 0x0B, segment not present
-    
+
     inc di
     mov rbx, handler_stack_segment_fault
     call make_entry                 ; int 0x0C, stack-segment fault
-    
+
     inc di
     mov rbx, handler_gpf
     call make_entry                 ; int 0x0D, general protection fault
-    
+
     inc di
     mov rbx, handler_pf
     call make_entry                 ; int 0x0E, page fault
-    
+
     add di, 2
     mov rbx, handler_x87_exception
     call make_entry                 ; int 0x10, x87 floating point exception
-    
+
     inc di
     mov rbx, handler_alignment_check
     call make_entry                 ; int 0x11, alignment check
-    
+
     inc di
     mov rbx, handler_machine_check
     call make_entry                 ; int 0x12, machine check
-    
+
     inc di
     mov rbx, handler_simd_exception
     call make_entry                 ; int 0x13, SIMD floating point exception
-    
+
     mov di, 0x1d
     mov rbx, handler_virtualisation_exception
     call make_entry                 ; int 0x14, virtualisation exception
-    
+
     inc di
     mov rbx, handler_security_exception
     call make_entry                 ; int 0x1E, security exception
-    
+
     add di, 2
     mov rbx, irq0_handler
     call make_entry
-    
+
     inc di
     mov rbx, keyboard_isr
     call make_entry
-    
+
     inc di
     mov rbx, handler_irq_apic
     call make_entry
-    
+
     inc di
     call make_entry
-    
+
     inc di
     call make_entry
-    
+
     inc di
     call make_entry
-    
+
     inc di
     call make_entry
-    
+
     inc di
     call make_entry
-    
+
     inc di
     call make_entry
-    
+
     inc di
     call make_entry
-    
+
     inc di
     call make_entry
-    
+
     inc di
     call make_entry
-    
+
     inc di
     mov rbx, mouse_isr
     call make_entry
-    
+
     inc di
     call make_entry
-    
+
     inc di
     call make_entry
-    
+
     inc di
     call make_entry
 
@@ -325,43 +328,16 @@ load_IDT:
     mov di, 0xff
     call make_entry
 
-    mov di, 0x82
-    mov dl, 11101110b
-    mov rbx, handler_yield
-    call make_entry
-
-    mov di, 0x83
-    mov rbx, handler_shutdown
-    call make_entry
-
-    mov di, 0x84
-    mov rbx, handler_reboot
-    call make_entry
-    
     mov rbx, IDT
     lidt [rbx]
-    
+
     pop rdi
     pop rdx
     pop rcx
     pop rbx
     ret
 
-extern reboot
-handler_reboot:
-    call reboot
-
-extern shutdown
-handler_shutdown:
-    call shutdown
-
 handler_abort:
     cli
     hlt
     jmp handler_abort
-
-handler_yield:
-    sti
-    hlt
-    cli
-    iretq

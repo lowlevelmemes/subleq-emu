@@ -91,12 +91,11 @@ extern except_virtualisation_exception
 extern except_security_exception
 
 ; misc external references
-extern kernel_pagemap
 extern eoi
 extern timer_interrupt
 extern ap_timer_interrupt
 extern keyboard_handler
-extern poll_mouse
+extern mouse_handler
 
 section .text
 
@@ -104,13 +103,7 @@ bits 64
 
 handler_irq_apic:
         pusham
-        mov rax, cr3
-        push rax
-        mov rax, kernel_pagemap
-        mov cr3, rax
         call eoi
-        pop rax
-        mov cr3, rax
         popam
         iretq
 
@@ -130,155 +123,113 @@ handler_irq_pic1:
         iretq
 
 handler_div0:
-        mov rax, kernel_pagemap
-        mov cr3, rax
         pop rdi
         pop rsi
         call except_div0
 
 handler_debug:
-        mov rax, kernel_pagemap
-        mov cr3, rax
         pop rdi
         pop rsi
         call except_debug
 
 handler_nmi:
-        mov rax, kernel_pagemap
-        mov cr3, rax
         pop rdi
         pop rsi
         call except_nmi
 
 handler_breakpoint:
-        mov rax, kernel_pagemap
-        mov cr3, rax
         pop rdi
         pop rsi
         call except_breakpoint
 
 handler_overflow:
-        mov rax, kernel_pagemap
-        mov cr3, rax
         pop rdi
         pop rsi
         call except_overflow
 
 handler_bound_range_exceeded:
-        mov rax, kernel_pagemap
-        mov cr3, rax
         pop rdi
         pop rsi
         call except_bound_range_exceeded
 
 handler_invalid_opcode:
-        mov rax, kernel_pagemap
-        mov cr3, rax
         pop rdi
         pop rsi
         call except_invalid_opcode
 
 handler_device_not_available:
-        mov rax, kernel_pagemap
-        mov cr3, rax
         pop rdi
         pop rsi
         call except_device_not_available
 
 handler_double_fault:
-        mov rax, kernel_pagemap
-        mov cr3, rax
         pop rdi
         pop rsi
         pop rdx
         call except_double_fault
 
 handler_coprocessor_segment_overrun:
-        mov rax, kernel_pagemap
-        mov cr3, rax
         pop rdi
         pop rsi
         call except_coprocessor_segment_overrun
 
 handler_invalid_tss:
-        mov rax, kernel_pagemap
-        mov cr3, rax
         pop rdi
         pop rsi
         pop rdx
         call except_invalid_tss
 
 handler_segment_not_present:
-        mov rax, kernel_pagemap
-        mov cr3, rax
         pop rdi
         pop rsi
         pop rdx
         call except_segment_not_present
 
 handler_stack_segment_fault:
-        mov rax, kernel_pagemap
-        mov cr3, rax
         pop rdi
         pop rsi
         pop rdx
         call except_stack_segment_fault
 
 handler_gpf:
-        mov rax, kernel_pagemap
-        mov cr3, rax
         pop rdi
         pop rsi
         pop rdx
         call except_gen_prot_fault
 
 handler_pf:
-        mov rax, kernel_pagemap
-        mov cr3, rax
         pop rdi
         pop rsi
         pop rdx
         call except_page_fault
 
 handler_x87_exception:
-        mov rax, kernel_pagemap
-        mov cr3, rax
         pop rdi
         pop rsi
         call except_x87_exception
 
 handler_alignment_check:
-        mov rax, kernel_pagemap
-        mov cr3, rax
         pop rdi
         pop rsi
         pop rdx
         call except_alignment_check
 
 handler_machine_check:
-        mov rax, kernel_pagemap
-        mov cr3, rax
         pop rdi
         pop rsi
         call except_machine_check
 
 handler_simd_exception:
-        mov rax, kernel_pagemap
-        mov cr3, rax
         pop rdi
         pop rsi
         call except_simd_exception
 
 handler_virtualisation_exception:
-        mov rax, kernel_pagemap
-        mov cr3, rax
         pop rdi
         pop rsi
         call except_virtualisation_exception
 
 handler_security_exception:
-        mov rax, kernel_pagemap
-        mov cr3, rax
         pop rdi
         pop rsi
         call except_security_exception
@@ -310,7 +261,7 @@ keyboard_isr:
 
 mouse_isr:
         pusham
-        call poll_mouse
+        call mouse_handler
         call eoi
         popam
         iretq

@@ -18,23 +18,26 @@ typedef struct {
     int tries;
 } io_stack_t;
 
-io_stack_t io_stack[4096];
+#define IO_STACK_MAX 4096
+
+io_stack_t io_stack[IO_STACK_MAX];
 int io_stack_ptr = 0;
 
 void subleq_io_write(uint64_t io_loc, uint64_t value) {
+    if (io_stack_ptr == IO_STACK_MAX)
+        panic("io_stack overflow", 0);
+
     io_stack[io_stack_ptr].io_loc = io_loc;
     io_stack[io_stack_ptr].value = value;
     io_stack[io_stack_ptr].tries = 0;
     io_stack_ptr++;
-    if (io_stack_ptr == 1024)
-        panic("io_stack overflow", 0);
 
     return;
 }
 
 void subleq_io_flush(void) {
 
-    while (io_stack_ptr) {
+    if (io_stack_ptr) {
         if (!_readram(io_stack[0].io_loc) || io_stack[0].tries == 10) {
             _writeram(io_stack[0].io_loc, io_stack[0].value);
             for (size_t j = 1; j < io_stack_ptr; j++) {
@@ -43,7 +46,6 @@ void subleq_io_flush(void) {
             io_stack_ptr--;
         } else {
             io_stack[0].tries++;
-            break;
         }
     }
 
