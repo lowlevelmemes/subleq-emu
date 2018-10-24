@@ -37,7 +37,7 @@ void subleq_io_write(uint64_t io_loc, uint64_t value) {
 
 void subleq_io_flush(void) {
 
-    if (io_stack_ptr) {
+    while (io_stack_ptr) {
         if (!_readram(io_stack[0].io_loc) || io_stack[0].tries == 10) {
             _writeram(io_stack[0].io_loc, io_stack[0].value);
             for (size_t j = 1; j < io_stack_ptr; j++) {
@@ -46,6 +46,7 @@ void subleq_io_flush(void) {
             io_stack_ptr--;
         } else {
             io_stack[0].tries++;
+            break;
         }
     }
 
