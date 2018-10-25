@@ -10,6 +10,50 @@ mov es, ax
 mov fs, ax
 mov gs, ax
 
+; ***** Memory check *****
+
+mem_check:
+
+push edx
+
+xor ebx, ebx
+.loop:
+mov eax, 0xe820
+mov ecx, 24
+mov edx, 0x534d4150
+mov edi, .e820_entry
+int 0x15
+jc .nomem
+test ebx, ebx
+jz .nomem
+cmp dword [.e820_entry], 0x100000
+jne .try_16
+cmp dword [.e820_entry + 16], 1
+jne .loop
+cmp dword [.e820_entry + 8], 0x1fe00000
+jb .loop
+jmp .out
+.try_16:
+cmp dword [.e820_entry], 0x1000000
+jne .loop
+cmp dword [.e820_entry + 16], 1
+jne .loop
+cmp dword [.e820_entry + 8], 0x1ee00000
+jb .loop
+jmp .out
+
+align 16
+.e820_entry:
+    times 32 db 0
+
+.nomem:
+mov si, NoMemMsg
+call simple_print
+jmp err
+
+.out:
+pop edx
+
 ; ***** A20 *****
 
 mov si, A20Msg					; Display A20 message
@@ -139,6 +183,9 @@ bits 16
 err:
 mov si, ErrMsg
 call simple_print
+.halt:
+hlt
+jmp .halt
 
 ;Data
 
@@ -146,6 +193,7 @@ A20Msg			db 'Enabling A20 line...', 0x00
 UnrealMsg		db 'Entering Unreal Mode...', 0x00
 KernelMsg		db 'Loading kernel...', 0x00
 DawnMsg         db 'Loading Dawn...', 0x00
+NoMemMsg        db 0x0D, 0x0A, 'Not enough memory to run subleq-emu: minimum 512 MiB required.', 0x00
 ErrMsg			db 0x0D, 0x0A, 'Error, system halted.', 0x00
 DoneMsg			db '  DONE', 0x0D, 0x0A, 0x00
 

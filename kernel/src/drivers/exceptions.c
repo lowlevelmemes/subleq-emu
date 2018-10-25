@@ -66,7 +66,7 @@ void except_device_not_available(size_t fault_rip, size_t fault_cs) {
 
 void except_double_fault(size_t error_code, size_t fault_rip, size_t fault_cs) {
 
-    panic("Double fault", error_code);
+    generic_exception(error_code, fault_rip, fault_cs, "Double fault", NULL);
 
 }
 

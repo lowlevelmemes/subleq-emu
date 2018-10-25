@@ -21,7 +21,7 @@ typedef struct {
 #define IO_STACK_MAX 4096
 
 static io_stack_t io_stack[IO_STACK_MAX];
-static int io_stack_ptr = 0;
+static size_t io_stack_ptr = 0;
 
 void subleq_io_write(uint64_t io_loc, uint64_t value) {
     if (io_stack_ptr == IO_STACK_MAX)
@@ -38,14 +38,13 @@ void subleq_io_write(uint64_t io_loc, uint64_t value) {
 void subleq_io_flush(void) {
 
     while (io_stack_ptr) {
-        if (!_readram(io_stack[0].io_loc) || io_stack[0].tries == 10) {
+        if (!_readram(io_stack[0].io_loc)) {
             _writeram(io_stack[0].io_loc, io_stack[0].value);
             for (size_t j = 1; j < io_stack_ptr; j++) {
                 io_stack[j - 1] = io_stack[j];
             }
             io_stack_ptr--;
         } else {
-            io_stack[0].tries++;
             break;
         }
     }
@@ -107,8 +106,8 @@ void subleq_redraw_screen(void) {
         volatile uint32_t *tmp = antibuffer0;
         antibuffer0 = antibuffer1;
         antibuffer1 = tmp;
-        for (size_t x = 0; x < vbe_width; x++) {
-            for (size_t y = 0; y < vbe_height; y++) {
+        for (int x = 0; x < vbe_width; x++) {
+            for (int y = 0; y < vbe_height; y++) {
                 size_t fb_i = x + vbe_width * y;
                 uint32_t val = dawn_framebuffer[fb_i];
                 asm volatile (

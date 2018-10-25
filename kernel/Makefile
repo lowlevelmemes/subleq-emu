@@ -19,7 +19,7 @@ CHARDFLAGS = -std=gnu99 -masm=intel \
 CLINKFLAGS = -nostdlib \
     -T ./linker.ld
 
-CFLAGS = -Wall -O2
+CFLAGS = -Wall -Wextra -O2
 
 subleq.bin: $(BINS) $(OBJ) $(H_FILES)
 	$(CC) $(OBJ) $(CLINKFLAGS) -o $@

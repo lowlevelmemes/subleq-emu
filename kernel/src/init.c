@@ -49,8 +49,6 @@ void kernel_init(void) {
 
     /* detect memory */
     init_e820();
-    if (memory_size < 0x1f000000)
-        panic("subleq-emu needs at least 500MiB of RAM to run.", memory_size);
 
     /* initialise paging */
     init_paging();

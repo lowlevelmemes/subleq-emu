@@ -69,7 +69,7 @@ void ioapic_redirect(uint8_t irq, uint32_t gsi, uint16_t flags, uint8_t apic) {
     ioapic_write(ioapic, ioredtbl + 1, (uint32_t)(redirection >> 32));
 }
 
-void lapic_set_nmi(uint8_t vec, uint8_t proc_id, uint16_t flags, uint8_t lint) {
+void lapic_set_nmi(uint8_t vec, uint16_t flags, uint8_t lint) {
     /* set as NMI and set the desired interrupt vector from the IDT */
     uint32_t nmi = 800 | vec;
     /* active low */
@@ -125,7 +125,7 @@ irq12_found:
 
 void install_nmis(void) {
     for (size_t i = 0; i < nmi_ptr; i++)
-        lapic_set_nmi(0x90 + i, nmis[i]->processor, nmis[i]->flags, nmis[i]->lint);
+        lapic_set_nmi(0x90 + i, nmis[i]->flags, nmis[i]->lint);
     return;
 }
 
