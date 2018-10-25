@@ -1,7 +1,8 @@
 #ifndef __KERNEL_H__
 #define __KERNEL_H__
 
-#define KERNEL_PHYS_OFFSET 0xffffffff00000000
+#define KERNEL_PHYS_OFFSET 0xffffffffc0000000
+#define PHYS_MEM_OFFSET 0xffff800000000000
 
 // misc tunables
 

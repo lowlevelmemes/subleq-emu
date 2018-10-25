@@ -20,8 +20,8 @@ typedef struct {
 
 #define IO_STACK_MAX 4096
 
-io_stack_t io_stack[IO_STACK_MAX];
-int io_stack_ptr = 0;
+static io_stack_t io_stack[IO_STACK_MAX];
+static int io_stack_ptr = 0;
 
 void subleq_io_write(uint64_t io_loc, uint64_t value) {
     if (io_stack_ptr == IO_STACK_MAX)
@@ -57,29 +57,32 @@ static volatile uint64_t last_frame_counter = 0;
 
 extern uint8_t initramfs[];
 
-uint32_t *dawn_framebuffer;
+static uint32_t *dawn_framebuffer;
 
-void _strcpyram(uint64_t dest, const char *mem) {
-    for (size_t i = 0; mem[i]; i++)
-        initramfs[dest++] = mem[i];
+pt_entry_t *subleq_pagemap;
 
-    initramfs[dest] = 0;
+static void subleq_acquire_mem(void) {
+    subleq_pagemap = kmalloc(1);
+    if (!subleq_pagemap)
+        for (;;);
 
-    return;
-}
+    subleq_pagemap = (pt_entry_t *)((size_t)subleq_pagemap + PHYS_MEM_OFFSET);
 
-void subleq_acquire_mem(void) {
-    size_t i;
+    /* Map in Dawn */
+    for (size_t i = 0; i < (256*1024*1024) / PAGE_SIZE; i++) {
+        map_page(subleq_pagemap, (size_t)initramfs + i * PAGE_SIZE, i * PAGE_SIZE);
+    }
+
+    size_t pg;
     uint64_t *lastptr = 0;
 
-    for (i = 0; ; i++) {
+    for (pg = 0; ; pg++) {
         uint64_t *ptr = kmalloc(1);
         if (!ptr)
             break;
-        lastptr = ptr;
-        map_page((pt_entry_t *)subleq_pagemap, (size_t)ptr, (size_t)0x1a000000 - (size_t)initramfs + i * PAGE_SIZE);
-        for (size_t j = 0; j < PAGE_SIZE / sizeof(uint64_t); j++)
-            ptr[j] = 0;
+        if (map_page(subleq_pagemap, (size_t)ptr, (size_t)(256*1024*1024) + pg * PAGE_SIZE))
+            break;
+        lastptr = (pt_entry_t *)((size_t)ptr + PHYS_MEM_OFFSET);
     }
 
     /* Add 8 KiB of gibberish because Dawn is great */
@@ -88,7 +91,12 @@ void subleq_acquire_mem(void) {
         lastptr[base + i] = 0xffffffffffffffff;
     }
 
-    kprint(KPRN_INFO, "subleq: Acquired %U 2 MiB pages.", i);
+    /* Map in kernel */
+    for (size_t i = 256; i < 512; i++) {
+        subleq_pagemap[i] = kernel_pagemap[i];
+    }
+
+    kprint(KPRN_INFO, "subleq: Acquired %U 2 MiB pages.", pg);
 
     return;
 }
@@ -153,24 +161,28 @@ static void get_cpu_name(char *str) {
 }
 
 void init_subleq(void) {
-    zero_subleq_memory();
+    subleq_acquire_mem();
 
-    dawn_framebuffer = (uint32_t *)&initramfs[256*1024*1024];
+    init_smp();
 
-    dawn_framebuffer = (uint32_t *)((size_t)dawn_framebuffer + KERNEL_PHYS_OFFSET);
+    asm volatile (
+        "mov cr3, rax;"
+        :
+        : "a" ((size_t)subleq_pagemap - PHYS_MEM_OFFSET)
+    );
+
+    subleq_ready = 1;
+
+    dawn_framebuffer = (uint32_t *)(256*1024*1024);
 
     /* CPU name */
-    get_cpu_name((char *)(&initramfs[335413288]));
+    get_cpu_name((char *)335413288);
 
     /* display */
     _writeram(335540096, (uint64_t)vbe_width);
     _writeram(335540096 + 8, (uint64_t)vbe_height);
     _writeram(335540096 + 16, (uint64_t)32);
     _writeram(335540096 + 24, (uint64_t)2);
-
-    subleq_acquire_mem();
-
-    init_smp();
 
     subleq_ready = 1;
 

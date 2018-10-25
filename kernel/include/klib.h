@@ -14,7 +14,6 @@ size_t kstrlen(const char *);
 void *kalloc(size_t);
 void kfree(void *);
 void *krealloc(void *, size_t);
-uint64_t power(uint64_t, uint64_t);
 void kputs(const char *);
 void knputs(const char *, size_t);
 void kprn_ui(uint64_t);

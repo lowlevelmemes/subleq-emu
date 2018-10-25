@@ -4,7 +4,7 @@ extern sections_data_end
 extern sections_bss_end
 global _start
 
-%define kernel_phys_offset 0xffffffff00000000
+%define kernel_phys_offset 0xffffffffc0000000
 
 bits 32
 

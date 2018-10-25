@@ -48,7 +48,12 @@ void ap_kernel_entry(void) {
 
     lapic_enable();
 
-    asm volatile ("sti");
+    asm volatile (
+        "mov cr3, rax;"
+        "sti;"
+        :
+        : "a" ((size_t)subleq_pagemap - PHYS_MEM_OFFSET)
+    );
 
     subleq();
 
@@ -72,7 +77,8 @@ static int start_ap(uint8_t target_apic_id, int cpu_number) {
     tss->rsp0 = (uint64_t)(&cpu_stacks[cpu_number]);
     tss->ist1 = (uint64_t)(&cpu_int_stacks[cpu_number]);
 
-    void *trampoline = prepare_smp_trampoline((void *)ap_kernel_entry, (void *)kernel_pagemap,
+    void *trampoline = prepare_smp_trampoline((void *)ap_kernel_entry,
+                                (void *)((size_t)kernel_pagemap - KERNEL_PHYS_OFFSET),
                                 &cpu_stacks[cpu_number], cpu_local, tss);
 
     /* Send the INIT IPI */

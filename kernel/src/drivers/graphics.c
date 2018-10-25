@@ -84,8 +84,6 @@ void plot_ab0_px(int x, int y, uint32_t hex) {
     return;
 }
 
-extern void *kernel_pagemap;
-
 void init_graphics(void) {
     /* interrupts are supposed to be OFF */
 
@@ -123,12 +121,10 @@ retry:
             /* mode found */
             kprint(KPRN_INFO, "VBE found matching mode %x, attempting to set.", get_vbe.mode);
             vbe_pitch = (int)vbe_mode_info.pitch;
-            framebuffer = (uint32_t *)((size_t)vbe_mode_info.framebuffer + KERNEL_PHYS_OFFSET);
+            framebuffer = (uint32_t *)((size_t)vbe_mode_info.framebuffer + PHYS_MEM_OFFSET);
             antibuffer0 = kalloc((vbe_pitch / sizeof(uint32_t)) * vbe_height * sizeof(uint32_t));
-            antibuffer0 = (uint32_t *)((size_t)antibuffer0 + KERNEL_PHYS_OFFSET);
             antibuffer1 = kalloc((vbe_pitch / sizeof(uint32_t)) * vbe_height * sizeof(uint32_t));
-            antibuffer1 = (uint32_t *)((size_t)antibuffer1 + KERNEL_PHYS_OFFSET);
-            kprint(KPRN_INFO, "Framebuffer address: %x", vbe_mode_info.framebuffer);
+            kprint(KPRN_INFO, "Framebuffer address: %X", framebuffer);
             set_vbe_mode(get_vbe.mode);
             goto success;
         }

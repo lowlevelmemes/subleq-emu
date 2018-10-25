@@ -17,17 +17,11 @@
   .%1a:
 %endmacro
 
-extern initramfs
-extern initramfs_end
-extern subleq_pagemap
 extern shutdown
 extern reboot
 
-global zero_subleq_memory
 global _readram
 global _writeram
-
-%define kernel_phys_offset 0xffffffff00000000
 
 section .text
 
@@ -35,9 +29,6 @@ bits 64
 
 global subleq
 subleq:
-    mov rax, subleq_pagemap
-    mov cr3, rax
-
     xor rsp, rsp       ; uint64_t eip = 0;
     mov r9, 1           ; int is_halted = 1;
 
@@ -127,31 +118,12 @@ subleq:
         hlt                     ; halt
         jmp .loop_allcpu               ; continue;
 
-zero_subleq_memory:
-    push rbx
-    push rbp
-
-    ; zero out subleq mem
-    mov rdi, initramfs_end
-    mov rcx, 0x1a000000
-    sub rcx, initramfs_end
-    mov rax, 0
-    rep stosb
-
-    pop rbp
-    pop rbx
-    ret
-
 _readram:
-    mov rax, initramfs + kernel_phys_offset
-    add rdi, rax
     mov rax, qword [rdi]
     bswap rax
     ret
 
 _writeram:
     bswap rsi
-    mov rax, initramfs + kernel_phys_offset
-    add rdi, rax
     mov qword [rdi], rsi
     ret

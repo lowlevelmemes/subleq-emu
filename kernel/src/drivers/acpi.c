@@ -34,7 +34,7 @@ void *acpi_find_sdt(const char *signature) {
 
     if (use_xsdt) {
         for (size_t i = 0; i < xsdt->sdt.length; i++) {
-            ptr = (acpi_sdt_t *)((size_t)xsdt->sdt_ptr[i] + KERNEL_PHYS_OFFSET);
+            ptr = (acpi_sdt_t *)((size_t)xsdt->sdt_ptr[i] + PHYS_MEM_OFFSET);
             if (!kstrncmp(ptr->signature, signature, 4)) {
                 kprint(KPRN_INFO, "acpi: Found \"%s\" at %X", signature, (size_t)ptr);
                 return (void *)ptr;
@@ -42,7 +42,7 @@ void *acpi_find_sdt(const char *signature) {
         }
     } else {
         for (size_t i = 0; i < rsdt->sdt.length; i++) {
-            ptr = (acpi_sdt_t *)((size_t)rsdt->sdt_ptr[i] + KERNEL_PHYS_OFFSET);
+            ptr = (acpi_sdt_t *)((size_t)rsdt->sdt_ptr[i] + PHYS_MEM_OFFSET);
             if (!kstrncmp(ptr->signature, signature, 4)) {
                 kprint(KPRN_INFO, "acpi: Found \"%s\" at %X", signature, (size_t)ptr);
                 return (void *)ptr;
@@ -59,10 +59,10 @@ void init_acpi(void) {
 
     /* look for the "RSD PTR " signature from 0x80000 to 0xa0000 */
                                            /* 0xf0000 to 0x100000 */
-    for (size_t i = 0x80000 + KERNEL_PHYS_OFFSET; i < 0x100000 + KERNEL_PHYS_OFFSET; i += 16) {
-        if (i == 0xa0000 + KERNEL_PHYS_OFFSET) {
+    for (size_t i = 0x80000 + PHYS_MEM_OFFSET; i < 0x100000 + PHYS_MEM_OFFSET; i += 16) {
+        if (i == 0xa0000 + PHYS_MEM_OFFSET) {
             /* skip video mem and mapped hardware */
-            i = 0xe0000 + KERNEL_PHYS_OFFSET - 16;
+            i = 0xe0000 + PHYS_MEM_OFFSET - 16;
             continue;
         }
         if (!kstrncmp((char *)i, "RSD PTR ", 8)) {
@@ -76,11 +76,11 @@ void init_acpi(void) {
 rsdp_found:
     if (rsdp->rev >= 2 && rsdp->xsdt_addr) {
         use_xsdt = 1;
-        kprint(KPRN_INFO, "acpi: Found XSDT at %X", (uint32_t)rsdp->xsdt_addr + KERNEL_PHYS_OFFSET);
-        xsdt = (xsdt_t *)(size_t)(rsdp->xsdt_addr + KERNEL_PHYS_OFFSET);
+        kprint(KPRN_INFO, "acpi: Found XSDT at %X", (uint32_t)rsdp->xsdt_addr + PHYS_MEM_OFFSET);
+        xsdt = (xsdt_t *)(size_t)(rsdp->xsdt_addr + PHYS_MEM_OFFSET);
     } else {
-        kprint(KPRN_INFO, "acpi: Found RSDT at %X", (uint32_t)rsdp->rsdt_addr + KERNEL_PHYS_OFFSET);
-        rsdt = (rsdt_t *)(size_t)(rsdp->rsdt_addr + KERNEL_PHYS_OFFSET);
+        kprint(KPRN_INFO, "acpi: Found RSDT at %X", (uint32_t)rsdp->rsdt_addr + PHYS_MEM_OFFSET);
+        rsdt = (rsdt_t *)(size_t)(rsdp->rsdt_addr + PHYS_MEM_OFFSET);
     }
 
     /* search for MADT table */
@@ -125,8 +125,8 @@ rsdp_found:
 
     facp = acpi_find_sdt("FACP");
 
-    char *dsdt_ptr = (char *)(size_t)facp->dsdt + 36 + KERNEL_PHYS_OFFSET;
-    size_t dsdt_len = *((uint32_t *)((size_t)facp->dsdt + 4 + KERNEL_PHYS_OFFSET)) - 36;
+    char *dsdt_ptr = (char *)(size_t)facp->dsdt + 36 + PHYS_MEM_OFFSET;
+    size_t dsdt_len = *((uint32_t *)((size_t)facp->dsdt + 4 + PHYS_MEM_OFFSET)) - 36;
 
     kprint(0, "DSDT_PTR = %X", dsdt_ptr);
     kprint(0, "DSDT_LEN = %X", dsdt_len);

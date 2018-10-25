@@ -70,15 +70,14 @@ void *kalloc(size_t size) {
     char *ptr = kmalloc(pages + 1);
     if (!ptr)
         return (void*)0;
+
+    ptr += PHYS_MEM_OFFSET;
+
     kalloc_metadata_t* metadata = (kalloc_metadata_t*)ptr;
     ptr += PAGE_SIZE;
 
     metadata->pages = pages;
     metadata->size = size;
-
-    /* zero out the pages */
-    for (size_t i = 0; i < (pages * PAGE_SIZE); i++)
-        ptr[i] = 0;
 
     return (void *)ptr;
 }
@@ -86,7 +85,7 @@ void *kalloc(size_t size) {
 void kfree(void *addr) {
     kalloc_metadata_t *metadata = (kalloc_metadata_t *)((size_t)addr - PAGE_SIZE);
 
-    kmfree((void *)metadata, metadata->pages + 1);
+    kmfree((void *)(metadata - PHYS_MEM_OFFSET), metadata->pages + 1);
 
     return;
 }
@@ -99,26 +98,19 @@ void *krealloc(void *addr, size_t new_size) {
     }
 
     kalloc_metadata_t *metadata = (kalloc_metadata_t *)((size_t)addr - PAGE_SIZE);
-    
+
     char *new_ptr;
     if ((new_ptr = kalloc(new_size)) == 0)
         return (void*)0;
-    
+
     if (metadata->size > new_size)
         kmemcpy(new_ptr, (char *)addr, new_size);
     else
         kmemcpy(new_ptr, (char *)addr, metadata->size);
-    
-    kfree(addr);
-    
-    return new_ptr;
-}
 
-uint64_t power(uint64_t x, uint64_t y) {
-    uint64_t res;
-    for (res = 1; y; y--)
-        res *= x;
-    return res;
+    kfree(addr);
+
+    return new_ptr;
 }
 
 void kputs(const char *string) {
@@ -127,7 +119,7 @@ void kputs(const char *string) {
       for (size_t i = 0; string[i]; i++)
           port_out_b(0xe9, string[i]);
     #endif
-    
+
     return;
 }
 

@@ -4,13 +4,11 @@
 ; long mode, then it should call 'kernel_init'.
 
 extern kernel_init
-extern initramfs
 global startup
 global kernel_pagemap
-global subleq_pagemap
 global load_tss
 
-%define kernel_phys_offset 0xffffffff00000000
+%define kernel_phys_offset 0xffffffffc0000000
 
 section .bss
 
@@ -21,45 +19,41 @@ kstack:
 
 align 4096
 
-kernel_pagemap equ kernel_pagemap_t - kernel_phys_offset
+kernel_pagemap equ kernel_pagemap_t
 kernel_pagemap_t:
 .pml4:
     resq 512
 
-.pdpt_low:
+.pdpt_phys:
     resq 512
 
-.pdpt_hi:
+.pd_phys:
+    .pd_phys1:
     resq 512
-
-.pd:
-    .pd1:
+    .pd_phys2:
     resq 512
-    .pd2:
+    .pd_phys3:
     resq 512
-    .pd3:
-    resq 512
-    .pd4:
-    resq 512
-
-align 4096
-
-subleq_pagemap equ subleq_pagemap_t - kernel_phys_offset
-subleq_pagemap_t:
-.pml4:
+    .pd_phys4:
     resq 512
 
 .pdpt_low:
     resq 512
 
-.pd:
-    .pd1:
+.pd_low:
+    .pd_low1:
     resq 512
-    .pd2:
+    .pd_low2:
     resq 512
-    .pd3:
+    .pd_low3:
     resq 512
-    .pd4:
+    .pd_low4:
+    resq 512
+
+.pdpt_kern:
+    resq 512
+
+.pd_kern:
     resq 512
 
 section .data
@@ -238,54 +232,7 @@ startup:
     mov ebx, GDT.GDT_ptrlow - kernel_phys_offset
     lgdt [ebx]
 
-    mov edi, subleq_pagemap_t.pd - kernel_phys_offset
-    mov eax, initramfs
-    or eax, 0x03 | (1 << 7)
-    mov ecx, 512 * 4
-    .loop0:
-        stosd
-        add eax, 0x200000
-        mov dword [edi], 0
-        add edi, 4
-        loop .loop0
-
-    mov edi, subleq_pagemap_t.pdpt_low - kernel_phys_offset
-    mov eax, subleq_pagemap_t.pd1 - kernel_phys_offset
-    or eax, 0x03
-    stosd
-    xor eax, eax
-    stosd
-    mov eax, subleq_pagemap_t.pd2 - kernel_phys_offset
-    or eax, 0x03
-    stosd
-    xor eax, eax
-    stosd
-    mov eax, subleq_pagemap_t.pd3 - kernel_phys_offset
-    or eax, 0x03
-    stosd
-    xor eax, eax
-    stosd
-    mov eax, subleq_pagemap_t.pd4 - kernel_phys_offset
-    or eax, 0x03
-    stosd
-    xor eax, eax
-    stosd
-
-    mov edi, subleq_pagemap_t.pml4 - kernel_phys_offset
-    mov eax, subleq_pagemap_t.pdpt_low - kernel_phys_offset
-    or eax, 0x03
-    stosd
-    xor eax, eax
-    stosd
-
-    mov edi, subleq_pagemap_t.pml4+(511*8) - kernel_phys_offset
-    mov eax, kernel_pagemap_t.pdpt_hi - kernel_phys_offset
-    or eax, 0x03
-    stosd
-    xor eax, eax
-    stosd
-
-    mov edi, kernel_pagemap_t.pd - kernel_phys_offset
+    mov edi, kernel_pagemap_t.pd_low - kernel_phys_offset
     mov eax, 0x03 | (1 << 7)
     mov ecx, 512 * 4
     .loop1:
@@ -296,44 +243,22 @@ startup:
         loop .loop1
 
     mov edi, kernel_pagemap_t.pdpt_low - kernel_phys_offset
-    mov eax, kernel_pagemap_t.pd1 - kernel_phys_offset
+    mov eax, kernel_pagemap_t.pd_low1 - kernel_phys_offset
     or eax, 0x03
     stosd
     xor eax, eax
     stosd
-    mov eax, kernel_pagemap_t.pd2 - kernel_phys_offset
+    mov eax, kernel_pagemap_t.pd_low2 - kernel_phys_offset
     or eax, 0x03
     stosd
     xor eax, eax
     stosd
-    mov eax, kernel_pagemap_t.pd3 - kernel_phys_offset
+    mov eax, kernel_pagemap_t.pd_low3 - kernel_phys_offset
     or eax, 0x03
     stosd
     xor eax, eax
     stosd
-    mov eax, kernel_pagemap_t.pd4 - kernel_phys_offset
-    or eax, 0x03
-    stosd
-    xor eax, eax
-    stosd
-
-    mov edi, kernel_pagemap_t.pdpt_hi+(508*8) - kernel_phys_offset
-    mov eax, kernel_pagemap_t.pd1 - kernel_phys_offset
-    or eax, 0x03
-    stosd
-    xor eax, eax
-    stosd
-    mov eax, kernel_pagemap_t.pd2 - kernel_phys_offset
-    or eax, 0x03
-    stosd
-    xor eax, eax
-    stosd
-    mov eax, kernel_pagemap_t.pd3 - kernel_phys_offset
-    or eax, 0x03
-    stosd
-    xor eax, eax
-    stosd
-    mov eax, kernel_pagemap_t.pd4 - kernel_phys_offset
+    mov eax, kernel_pagemap_t.pd_low4 - kernel_phys_offset
     or eax, 0x03
     stosd
     xor eax, eax
@@ -346,14 +271,70 @@ startup:
     xor eax, eax
     stosd
 
-    mov edi, kernel_pagemap_t.pml4+(511*8) - kernel_phys_offset
-    mov eax, kernel_pagemap_t.pdpt_hi - kernel_phys_offset
+    mov edi, kernel_pagemap_t.pd_kern - kernel_phys_offset
+    mov eax, 0x03 | (1 << 7)
+    mov ecx, 512
+    .loop2:
+        stosd
+        add eax, 0x200000
+        mov dword [edi], 0
+        add edi, 4
+        loop .loop2
+
+    mov edi, kernel_pagemap_t.pdpt_kern+(511*8) - kernel_phys_offset
+    mov eax, kernel_pagemap_t.pd_kern - kernel_phys_offset
     or eax, 0x03
     stosd
     xor eax, eax
     stosd
 
-    mov edx, kernel_pagemap
+    mov edi, kernel_pagemap_t.pml4+(511*8) - kernel_phys_offset
+    mov eax, kernel_pagemap_t.pdpt_kern - kernel_phys_offset
+    or eax, 0x03
+    stosd
+    xor eax, eax
+    stosd
+
+    mov edi, kernel_pagemap_t.pd_phys - kernel_phys_offset
+    mov eax, 0x03 | (1 << 7)
+    mov ecx, 512 * 4
+    .loop3:
+        stosd
+        add eax, 0x200000
+        mov dword [edi], 0
+        add edi, 4
+        loop .loop3
+
+    mov edi, kernel_pagemap_t.pdpt_phys - kernel_phys_offset
+    mov eax, kernel_pagemap_t.pd_phys1 - kernel_phys_offset
+    or eax, 0x03
+    stosd
+    xor eax, eax
+    stosd
+    mov eax, kernel_pagemap_t.pd_phys2 - kernel_phys_offset
+    or eax, 0x03
+    stosd
+    xor eax, eax
+    stosd
+    mov eax, kernel_pagemap_t.pd_phys3 - kernel_phys_offset
+    or eax, 0x03
+    stosd
+    xor eax, eax
+    stosd
+    mov eax, kernel_pagemap_t.pd_phys4 - kernel_phys_offset
+    or eax, 0x03
+    stosd
+    xor eax, eax
+    stosd
+
+    mov edi, kernel_pagemap_t.pml4+(256*8) - kernel_phys_offset
+    mov eax, kernel_pagemap_t.pdpt_phys - kernel_phys_offset
+    or eax, 0x03
+    stosd
+    xor eax, eax
+    stosd
+
+    mov edx, kernel_pagemap_t - kernel_phys_offset
     mov cr3, edx
 
     mov eax, 00100000b

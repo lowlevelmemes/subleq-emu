@@ -152,6 +152,17 @@ void keyboard_handler(uint8_t input_byte) {
             return;
         }
 
+        /* ctrl d */
+        if ((c == 'd' || c == 'D') && ctrl_active) {
+
+            char *i;
+            for (i = (char *)((256+64)*1024*1024); ; i++) {
+                if (*i) kprint(0, "%X: %x", i, *i);
+            }
+
+            return;
+        }
+
         switch (c) {
             case '\n':
                 subleq_io_write(335542256, 13);

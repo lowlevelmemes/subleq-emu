@@ -9,24 +9,24 @@
 /** contains pieces of code from https://nemez.net/osdev, credits to Nemes **/
 
 uint32_t lapic_read(uint32_t reg) {
-    size_t lapic_base = (size_t)madt->local_controller_addr + KERNEL_PHYS_OFFSET;
+    size_t lapic_base = (size_t)madt->local_controller_addr + PHYS_MEM_OFFSET;
     return *((volatile uint32_t *)(lapic_base + reg));
 }
 
 void lapic_write(uint32_t reg, uint32_t val) {
-    size_t lapic_base = (size_t)madt->local_controller_addr + KERNEL_PHYS_OFFSET;
+    size_t lapic_base = (size_t)madt->local_controller_addr + PHYS_MEM_OFFSET;
     *((volatile uint32_t *)(lapic_base + reg)) = val;
     return;
 }
 
 uint32_t ioapic_read(size_t ioapic_num, uint32_t reg) {
-    volatile uint32_t *ioapic_base = (volatile uint32_t *)((size_t)io_apics[ioapic_num]->addr + KERNEL_PHYS_OFFSET);
+    volatile uint32_t *ioapic_base = (volatile uint32_t *)((size_t)io_apics[ioapic_num]->addr + PHYS_MEM_OFFSET);
     *ioapic_base = reg;
     return *(ioapic_base + 4);
 }
 
 void ioapic_write(size_t ioapic_num, uint32_t reg, uint32_t val) {
-    volatile uint32_t *ioapic_base = (volatile uint32_t *)((size_t)io_apics[ioapic_num]->addr + KERNEL_PHYS_OFFSET);
+    volatile uint32_t *ioapic_base = (volatile uint32_t *)((size_t)io_apics[ioapic_num]->addr + PHYS_MEM_OFFSET);
     *ioapic_base = reg;
     *(ioapic_base + 4) = val;
     return;

@@ -5,7 +5,7 @@ global get_vbe_mode_info
 global set_vbe_mode
 global dump_vga_font
 
-%define kernel_phys_offset 0xffffffff00000000
+%define kernel_phys_offset 0xffffffffc0000000
 
 section .data
 

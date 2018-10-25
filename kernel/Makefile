@@ -11,7 +11,7 @@ CHARDFLAGS = -std=gnu99 -masm=intel \
     -mno-sse \
     -mno-sse2 \
     -mno-red-zone \
-    -mcmodel=large \
+    -mcmodel=kernel \
     -nostdlib \
     -ffreestanding \
     -I./include/
