@@ -21,29 +21,22 @@ void timer_interrupt(void) {
     if (subleq_ready) {
 
         /* raise vector 0x80 for all APs */
-        lapic_write(APICREG_ICR0, 0x80 | (1 << 18) | (1 << 19));
+        for (int i = 1; i < cpu_count; i++) {
+            lapic_write(APICREG_ICR1, ((uint32_t)cpu_locals[i].lapic_id) << 24);
+            lapic_write(APICREG_ICR0, 0x80);
+        }
 
         _writeram(335544304, _readram(335544304) + (0x100000000 / KRNL_PIT_FREQ));
 
         subleq_io_flush();
 
-        if (!(uptime_raw % (KRNL_PIT_FREQ / 50)))
+        if (!(uptime_raw % (KRNL_PIT_FREQ / MOUSE_UPDATE_FREQ)))
             mouse_update();
 
-        if (cpu_count == 1)
-            if (!(uptime_raw % (KRNL_PIT_FREQ / SCREEN_REFRESH_FREQ)))
-                subleq_redraw_screen();
-
-    }
-
-    return;
-}
-
-void ap_timer_interrupt(void) {
-
-    if (get_cpu_number() == cpu_count - 1)
         if (!(uptime_raw % (KRNL_PIT_FREQ / SCREEN_REFRESH_FREQ)))
             subleq_redraw_screen();
+
+    }
 
     return;
 }

@@ -37,7 +37,7 @@ typedef struct {
 
 static cpu_stack_t cpu_stacks[MAX_CPUS];
 static cpu_stack_t cpu_int_stacks[MAX_CPUS];
-static cpu_local_t cpu_locals[MAX_CPUS];
+cpu_local_t cpu_locals[MAX_CPUS];
 static tss_t cpu_tss[MAX_CPUS] __attribute__((aligned(16)));
 
 void ap_kernel_entry(void) {
@@ -70,6 +70,7 @@ static int start_ap(uint8_t target_apic_id, int cpu_number) {
 
     cpu_local->cpu_number = cpu_number;
     cpu_local->kernel_stack = (void *)&cpu_stacks[cpu_number];
+    cpu_local->lapic_id = target_apic_id;
 
     /* prepare TSS */
     tss_t *tss = &cpu_tss[cpu_number];
@@ -110,12 +111,13 @@ success:
     return 0;
 }
 
-static void init_cpu0(void) {
+void init_cpu0(void) {
     /* create CPU 0 local struct */
     cpu_local_t *cpu_local = &cpu_locals[0];
 
     cpu_local->cpu_number = 0;
     cpu_local->kernel_stack = (void *)&cpu_stacks[0];
+    cpu_local->lapic_id = 0;
 
     tss_t *tss = &cpu_tss[0];
 
@@ -128,11 +130,6 @@ static void init_cpu0(void) {
 }
 
 void init_smp(void) {
-    /* prepare CPU 0 first */
-    init_cpu0();
-
-    asm volatile ("sti");
-
     /* start up the APs and jump them into the kernel */
     for (size_t i = 1; i < local_apic_ptr; i++) {
         kprint(KPRN_INFO, "smp: Starting up AP #%u", i);

@@ -337,7 +337,8 @@ startup:
     mov edx, kernel_pagemap_t - kernel_phys_offset
     mov cr3, edx
 
-    mov eax, 00100000b
+    mov eax, cr4
+    or eax, 1 << 5
     mov cr4, eax
 
     mov ecx, 0xc0000080

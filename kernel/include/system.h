@@ -7,7 +7,12 @@
 typedef struct {
     int cpu_number;
     uint8_t *kernel_stack;
+    uint8_t lapic_id;
 } cpu_local_t;
+
+extern cpu_local_t cpu_locals[];
+
+void init_cpu0(void);
 
 int get_cpu_number(void);
 uint64_t get_cpu_kernel_stack(void);

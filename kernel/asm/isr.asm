@@ -93,7 +93,6 @@ extern except_security_exception
 ; misc external references
 extern eoi
 extern timer_interrupt
-extern ap_timer_interrupt
 extern keyboard_handler
 extern mouse_handler
 
@@ -236,7 +235,6 @@ handler_security_exception:
 
 handler_wakeup:
         pusham
-        call ap_timer_interrupt
         call eoi
         popam
         iretq

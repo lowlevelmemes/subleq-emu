@@ -7,6 +7,7 @@
 // misc tunables
 
 #define KRNL_PIT_FREQ 1000
+#define MOUSE_UPDATE_FREQ 50
 #define SCREEN_REFRESH_FREQ 30
 
 

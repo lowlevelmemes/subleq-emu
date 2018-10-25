@@ -160,6 +160,10 @@ static void get_cpu_name(char *str) {
 }
 
 void init_subleq(void) {
+    init_cpu0();
+
+    asm volatile ("sti");
+
     subleq_acquire_mem();
 
     init_smp();
