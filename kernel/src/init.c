@@ -15,7 +15,7 @@
 
 size_t memory_size;
 
-void get_time(int *seconds, int *minutes, int *hours,
+int get_time(int *seconds, int *minutes, int *hours,
               int *days, int *months, int *years);
 
 uint64_t get_jdn(int days, int months, int years) {
@@ -59,10 +59,15 @@ void kernel_init(void) {
     init_graphics();
 
     int hours, minutes, seconds, days, months, years;
-    get_time(&seconds, &minutes, &hours, &days, &months, &years);
-    kprint(KPRN_INFO, "Current time: %u/%u/%u %u:%u:%u", years, months, days, hours, minutes, seconds);
+    uint64_t dawn_epoch;
+    if (get_time(&seconds, &minutes, &hours, &days, &months, &years)) {
+        kprint(KPRN_ERR, "Error trying to retrieve current time");
+        dawn_epoch = 0;
+    } else {
+        kprint(KPRN_INFO, "Current time: %u/%u/%u %u:%u:%u", years, months, days, hours, minutes, seconds);
+        dawn_epoch = get_dawn_epoch(seconds, minutes, hours, days, months, years);
+    }
 
-    uint64_t dawn_epoch = get_dawn_epoch(seconds, minutes, hours, days, months, years);
     kprint(KPRN_INFO, "Dawn epoch: %U", dawn_epoch);
 
     /* remap PIC where it doesn't bother us */

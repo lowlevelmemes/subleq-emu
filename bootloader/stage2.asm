@@ -123,7 +123,7 @@ call simple_print				; Display done message
 mov si, DawnMsg				; Print loading Dawn message
 call simple_print
 
-mov ax, 128						; Start from LBA sector 128
+mov ax, 2048					; Start from LBA sector 2048
 push 0x0
 pop es
 mov ebx, 0x1000000
@@ -192,8 +192,13 @@ jmp .halt
 A20Msg			db 'Enabling A20 line...', 0x00
 UnrealMsg		db 'Entering Unreal Mode...', 0x00
 KernelMsg		db 'Loading kernel...', 0x00
-DawnMsg         db 'Loading Dawn...', 0x00
-NoMemMsg        db 0x0D, 0x0A, 'Not enough memory to run subleq-emu: minimum 512 MiB required.', 0x00
+DawnMsg         db 'Loading Dawn (please be patient)...', 0x00
+NoMemMsg        db 0x0D, 0x0A, 'Not enough memory to run subleq-emu: minimum 512 MiB required.', 0x0d, 0x0a
+                db 0x0D, 0x0A, 'If 512 MiB or more of memory are already present in the system,'
+                db 0x0d, 0x0a, 'that might mean that the physical memory layout contains holes.'
+                db 0x0d, 0x0a, 'As of now, subleq-emu is uncapable of dealing with memory holes'
+                db 0x0d, 0x0a, 'below 512 MiB. Try running it on another machine!'
+                db 0x0d, 0x0a, 'Sorry for the inconvenience.', 0x0d, 0x0a, 0x00
 ErrMsg			db 0x0D, 0x0A, 'Error, system halted.', 0x00
 DoneMsg			db '  DONE', 0x0D, 0x0A, 0x00
 
@@ -205,6 +210,7 @@ bits 16
 %include 'includes/a20_enabler.inc'
 %include 'includes/gdt.inc'
 
+align 16
 kernel:
 incbin '../kernel/subleq.bin'
 .end:

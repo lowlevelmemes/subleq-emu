@@ -1,3 +1,5 @@
+DEBUG = off
+
 CC = x86_64-elf-gcc
 
 C_FILES = $(shell find src -type f -name '*.c')
@@ -15,6 +17,10 @@ CHARDFLAGS = -std=gnu99 -masm=intel \
     -nostdlib \
     -ffreestanding \
     -I./include/
+
+ifeq ($(DEBUG), on)
+CHARDFLAGS := $(CHARDFLAGS) -D_KERNEL_DEBUG_OUTPUT_
+endif
 
 CLINKFLAGS = -nostdlib \
     -T ./linker.ld

@@ -18,6 +18,7 @@ date_and_time:
     .months db 0
     .years db 0
     .centuries db 0
+    .error db 0
 
 section .text
 
@@ -76,6 +77,9 @@ get_time:
     xor eax, eax
     mov r12, date_and_time
 
+    cmp byte [r12+7], 0
+    jne .err
+
     mov rbx, date_and_time.seconds
     call bcd_to_int
     mov al, byte [r12+0]
@@ -113,6 +117,13 @@ get_time:
     mul cx
     add dword [r9], eax
 
+    xor rax, rax
+    jmp .done
+
+.err:
+    mov rax, -1
+
+.done:
     pop r15
     pop r14
     pop r13
