@@ -3,6 +3,7 @@
 #include <cio.h>
 #include <klib.h>
 #include <subleq.h>
+#include <mouse.h>
 
 #define MAX_CODE 0x57
 #define CAPSLOCK 0x3A
@@ -49,6 +50,61 @@ static int extra_scancodes = 0;
 
 void keyboard_handler(uint8_t input_byte) {
     char c;
+
+    switch (input_byte) {
+        case 0x4b:
+            /* keypad 4 */
+            hw_mouse_enabled = 0;
+            subleq_io_write(335542176 + 3 * 8, -0x3000000);
+            return;
+        case 0x4d:
+            /* keypad 6 */
+            hw_mouse_enabled = 0;
+            subleq_io_write(335542176 + 3 * 8, 0x3000000);
+            return;
+        case 0x48:
+            /* keypad 8 */
+            hw_mouse_enabled = 0;
+            subleq_io_write(335542176 + 4 * 8, -0x3000000);
+            return;
+        case 0x50:
+            /* keypad 2 */
+            hw_mouse_enabled = 0;
+            subleq_io_write(335542176 + 4 * 8, 0x3000000);
+            return;
+        case 0x47:
+            /* keypad 7 */
+            hw_mouse_enabled = 0;
+            _writeram(335542176 + 0 * 8, 0x100000000);
+            return;
+        case 0xc7:
+            /* keypad 7 rel */
+            hw_mouse_enabled = 0;
+            _writeram(335542176 + 0 * 8, 0);
+            return;
+        case 0x49:
+            /* keypad 9 */
+            hw_mouse_enabled = 0;
+            _writeram(335542176 + 1 * 8, 0x100000000);
+            return;
+        case 0xc9:
+            /* keypad 9 rel */
+            hw_mouse_enabled = 0;
+            _writeram(335542176 + 1 * 8, 0);
+            return;
+        case 0x4c:
+            /* keypad 5 */
+            hw_mouse_enabled = 0;
+            _writeram(335542176 + 2 * 8, 0x100000000);
+            return;
+        case 0xcc:
+            /* keypad 5 rel */
+            hw_mouse_enabled = 0;
+            _writeram(335542176 + 2 * 8, 0);
+            return;
+        default:
+            break;
+    }
 
     if (input_byte == 0xe0) {
         extra_scancodes = 1;

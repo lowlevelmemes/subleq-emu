@@ -18,8 +18,10 @@ CHARDFLAGS = -std=gnu99 -masm=intel \
     -ffreestanding \
     -I./include/
 
-ifeq ($(DEBUG), on)
-CHARDFLAGS := $(CHARDFLAGS) -D_KERNEL_DEBUG_OUTPUT_
+ifeq ($(DEBUG), qemu)
+CHARDFLAGS := $(CHARDFLAGS) -D_KERNEL_QEMU_OUTPUT_
+else ifeq ($(DEBUG), vga)
+CHARDFLAGS := $(CHARDFLAGS) -D_KERNEL_VGA_OUTPUT_
 endif
 
 CLINKFLAGS = -nostdlib \

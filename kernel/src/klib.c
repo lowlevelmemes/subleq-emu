@@ -6,6 +6,7 @@
 #include <paging.h>
 #include <system.h>
 #include <cio.h>
+#include <tty.h>
 
 size_t memcpy(char *dest, const char *source, size_t count) {
     return kmemcpy(dest, source, count);
@@ -115,20 +116,28 @@ void *krealloc(void *addr, size_t new_size) {
 
 void kputs(const char *string) {
 
-    #ifdef _KERNEL_DEBUG_OUTPUT_
-      for (size_t i = 0; string[i]; i++)
-          port_out_b(0xe9, string[i]);
-    #endif
+    for (size_t i = 0; string[i]; i++) {
+      #ifdef _KERNEL_QEMU_OUTPUT_
+        port_out_b(0xe9, string[i]);
+      #endif
+      #ifdef _KERNEL_VGA_OUTPUT_
+        tty_putchar(string[i]);
+      #endif
+    }
 
     return;
 }
 
 void knputs(const char *string, size_t len) {
 
-    #ifdef _KERNEL_DEBUG_OUTPUT_
-      for (size_t i = 0; i < len; i++)
-          port_out_b(0xe9, string[i]);
-    #endif
+    for (size_t i = 0; i < len; i++) {
+      #ifdef _KERNEL_QEMU_OUTPUT_
+        port_out_b(0xe9, string[i]);
+      #endif
+      #ifdef _KERNEL_VGA_OUTPUT_
+        tty_putchar(string[i]);
+      #endif
+    }
 
     return;
 }

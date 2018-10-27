@@ -6,6 +6,8 @@
 #include <subleq.h>
 #include <panic.h>
 
+int hw_mouse_enabled = 0;
+
 typedef struct {
     uint8_t flags;
     uint8_t x_mov;
@@ -93,6 +95,16 @@ static inline uint64_t scale_position(uint64_t min, uint64_t max,
 }
 
 void put_mouse_cursor(void) {
+    if (!hw_mouse_enabled) {
+        for (size_t x = 0; x < 16; x++) {
+            for (size_t y = 0; y < 16; y++) {
+                plot_px(old_mouse_x + x, old_mouse_y + y,
+                    get_ab0_px(old_mouse_x + x, old_mouse_y + y));
+            }
+        }
+        return;
+    }
+
     for (size_t x = 0; x < 16; x++) {
         for (size_t y = 0; y < 16; y++) {
             plot_px(old_mouse_x + x, old_mouse_y + y,
@@ -201,11 +213,17 @@ void mouse_update(void) {
             +9  =   scroll wheel
     */
 
+    if (!hw_mouse_enabled)
+        return;
+
     /* wait for Dawn to clear mouse registers 3 through 9 */
     if (
+        _readram(335542176 + 3 * 8) ||
+        _readram(335542176 + 4 * 8) ||
         _readram(335542176 + 6 * 8) ||
         _readram(335542176 + 7 * 8) ||
-        _readram(335542176 + 8 * 8)
+        _readram(335542176 + 8 * 8) ||
+        _readram(335542176 + 6 * 9)
     ) return;
 
     if (packet_i) {
@@ -286,6 +304,8 @@ static int is_location_info(mouse_packet_t *p) {
 void mouse_handler(void) {
     uint8_t b;
     mouse_packet_t packet;
+
+    hw_mouse_enabled = 1;
 
     if (!(((b = port_in_b(0x64)) & 1) && (b & (1 << 5))))
         return;

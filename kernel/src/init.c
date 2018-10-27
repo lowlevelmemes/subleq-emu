@@ -12,6 +12,8 @@
 #include <acpi.h>
 #include <apic.h>
 #include <e820.h>
+#include <vga_textmode.h>
+#include <vbe_tty.h>
 
 size_t memory_size;
 
@@ -36,10 +38,9 @@ uint64_t get_dawn_epoch(int seconds, int minutes, int hours,
 void kernel_init(void) {
     /* interrupts disabled */
 
-    /* mask all PIC IRQs */
-    kprint(KPRN_INFO, "PIC: Masking legacy PICs...");
-    set_PIC0_mask(0b11111111);
-    set_PIC1_mask(0b11111111);
+    #ifdef _KERNEL_VGA_OUTPUT_
+        init_vga_textmode();
+    #endif
 
     /* build descriptor tables */
     load_IDT();
@@ -50,13 +51,12 @@ void kernel_init(void) {
     /* initialise paging */
     init_paging();
 
-    #ifdef _SERIAL_KERNEL_OUTPUT_
-      /* initialise kernel serial debug console */
-      debug_kernel_console_init();
-    #endif
-
     /* initialise graphics mode */
     init_graphics();
+
+    #ifdef _KERNEL_VGA_OUTPUT_
+        init_vbe_tty();
+    #endif
 
     int hours, minutes, seconds, days, months, years;
     uint64_t dawn_epoch;
@@ -65,14 +65,23 @@ void kernel_init(void) {
         dawn_epoch = 0;
     } else {
         kprint(KPRN_INFO, "Current time: %u/%u/%u %u:%u:%u", years, months, days, hours, minutes, seconds);
-        dawn_epoch = get_dawn_epoch(seconds, minutes, hours, days, months, years);
+        if (years < 2016) {
+            kprint(KPRN_ERR, "Year < 2016 is an invalid Dawn epoch");
+            dawn_epoch = 0;
+        } else {
+            dawn_epoch = get_dawn_epoch(seconds, minutes, hours, days, months, years);
+        }
     }
 
     kprint(KPRN_INFO, "Dawn epoch: %U", dawn_epoch);
 
     /* remap PIC where it doesn't bother us */
+    kprint(KPRN_INFO, "PIC: Remapping and masking legacy PICs...");
     map_PIC(0xa0, 0xa8);
-    kprint(KPRN_INFO, "PIC: PIC 0 and 1 disabled.");
+    /* mask all PIC IRQs */
+    set_PIC0_mask(0b11111111);
+    set_PIC1_mask(0b11111111);
+    kprint(KPRN_INFO, "PIC: PIC 0 and 1 remapped and masked.");
 
     init_mouse();
 
