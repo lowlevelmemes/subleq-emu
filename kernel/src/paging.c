@@ -8,13 +8,11 @@
 
 extern uint8_t initramfs[];
 
-#define MEMORY_BASE ((size_t)(initramfs + 256*1024*1024))
-#define INITIAL_BITMAP_SIZE 1
+#define MEMORY_BASE ((size_t)(initramfs + 256*1024*1024) + ((size_t)(initramfs + 256*1024*1024) % PAGE_SIZE))
 #define BITMAP_BASE (MEMORY_BASE / PAGE_SIZE)
 
-static volatile size_t bitmap_full = INITIAL_BITMAP_SIZE;
 static volatile uint32_t *mem_bitmap;
-static volatile uint32_t initial_bitmap[INITIAL_BITMAP_SIZE];
+static volatile uint32_t initial_bitmap[] = { 0xfffffffe };
 static volatile uint32_t *tmp_bitmap;
 
 static inline int rd_bitmap(size_t i) {
@@ -47,7 +45,7 @@ void *kmalloc(size_t pages) {
     size_t pg_counter = 0;
     size_t i;
     size_t strt_page;
-    for (i = BITMAP_BASE; i < BITMAP_BASE + (bitmap_full * 32); i++) {
+    for (i = BITMAP_BASE; i < BITMAP_BASE + ((PAGE_SIZE / sizeof(uint32_t)) * 32); i++) {
         if (!rd_bitmap(i))
             pg_counter++;
         else
@@ -84,42 +82,19 @@ void kmfree(void *ptr, size_t pages) {
 
 }
 
-static void bm_realloc(void) {
-    if (!(tmp_bitmap = kalloc((bitmap_full + 16) * sizeof(uint32_t)))) {
-        kprint(KPRN_ERR, "kalloc failure in bm_realloc(). Halted.");
-        for (;;);
-    }
-
-    kmemcpy((void *)tmp_bitmap, (void *)mem_bitmap, bitmap_full * sizeof(uint32_t));
-    for (size_t i = bitmap_full; i < bitmap_full + 16; i++) {
-        tmp_bitmap[i] = 0xffffffff;
-    }
-
-    bitmap_full += 16;
-
-    volatile uint32_t *tmp = tmp_bitmap;
-    tmp_bitmap = mem_bitmap;
-    mem_bitmap = tmp;
-
-    kfree((void *)tmp_bitmap);
-
-    return;
-}
-
 /* Populate bitmap using e820 data. */
 void init_pmm(void) {
-    for (size_t i = 0; i < bitmap_full; i++) {
-        initial_bitmap[i] = 0;
-    }
-
     mem_bitmap = initial_bitmap;
-    if (!(tmp_bitmap = kalloc(bitmap_full * sizeof(uint32_t)))) {
+    if (!(tmp_bitmap = kmalloc(1))) {
         kprint(KPRN_ERR, "kalloc failure in init_pmm(). Halted.");
         for (;;);
     }
 
-    for (size_t i = 0; i < bitmap_full; i++)
-        tmp_bitmap[i] = initial_bitmap[i];
+    tmp_bitmap = (uint32_t *)((size_t)tmp_bitmap + PHYS_MEM_OFFSET);
+
+    for (size_t i = 0; i < PAGE_SIZE / sizeof(uint32_t); i++)
+        tmp_bitmap[i] = 0xffffffff;
+
     mem_bitmap = tmp_bitmap;
 
     kprint(KPRN_INFO, "pmm: Mapping memory as specified by the e820...");
@@ -128,16 +103,22 @@ void init_pmm(void) {
        fits in that region and if the region type indicates the area itself
        is usable, write that page as free in the bitmap. Otherwise, mark the page as used. */
     for (size_t i = 0; e820_map[i].type; i++) {
-        for (size_t j = 0; j * PAGE_SIZE < e820_map[i].length; j++) {
-            size_t addr = e820_map[i].base + j * PAGE_SIZE;
+        size_t aligned_base;
+        if (e820_map[i].base % PAGE_SIZE)
+            aligned_base = e820_map[i].base + (PAGE_SIZE - (e820_map[i].base % PAGE_SIZE));
+        else
+            aligned_base = e820_map[i].base;
+        size_t aligned_length = (e820_map[i].length / PAGE_SIZE) * PAGE_SIZE;
+        if ((e820_map[i].base % PAGE_SIZE) && aligned_length) aligned_length -= PAGE_SIZE;
 
-            if (addr < MEMORY_BASE + (INITIAL_BITMAP_SIZE * 32 * PAGE_SIZE))
-                continue;
+        for (size_t j = 0; j * PAGE_SIZE < aligned_length; j++) {
+            size_t addr = aligned_base + j * PAGE_SIZE;
 
             size_t page = addr / PAGE_SIZE;
 
-            while (page >= bitmap_full * 32)
-                bm_realloc();
+            if (addr < (MEMORY_BASE + PAGE_SIZE /* bitmap */))
+                continue;
+
             if (e820_map[i].type == 1)
                 wr_bitmap(page, 0);
             else
@@ -152,8 +133,13 @@ void init_vmm(void) {
     kprint(KPRN_INFO, "vmm: Identity mapping memory as specified by the e820...");
 
     for (size_t i = 0; e820_map[i].type; i++) {
-        for (size_t j = 0; j * PAGE_SIZE < e820_map[i].length; j++) {
-            size_t addr = e820_map[i].base + j * PAGE_SIZE;
+        size_t aligned_base = e820_map[i].base - (e820_map[i].base % PAGE_SIZE);
+        size_t aligned_length = (e820_map[i].length / PAGE_SIZE) * PAGE_SIZE;
+        if (e820_map[i].length % PAGE_SIZE) aligned_length += PAGE_SIZE;
+        if (e820_map[i].base % PAGE_SIZE) aligned_length += PAGE_SIZE;
+
+        for (size_t j = 0; j * PAGE_SIZE < aligned_length; j++) {
+            size_t addr = aligned_base + j * PAGE_SIZE;
 
             if (addr < 0x100000000)
                 continue;

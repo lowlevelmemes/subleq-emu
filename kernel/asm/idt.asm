@@ -105,7 +105,7 @@ load_IDT:
 
     xor di, di
     mov dl, 10001110b
-    mov dh, 1
+    mov dh, 0
     mov cx, 0x08
     mov rbx, handler_div0
     call make_entry                 ; int 0x00, divide by 0
@@ -190,6 +190,7 @@ load_IDT:
     mov rbx, handler_security_exception
     call make_entry                 ; int 0x1E, security exception
 
+    mov dh, 1
     add di, 2
     mov rbx, irq0_handler
     call make_entry
