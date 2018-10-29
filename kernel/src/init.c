@@ -35,6 +35,8 @@ uint64_t get_dawn_epoch(int seconds, int minutes, int hours,
     return (jdn_diff * (60 * 60 * 24)) + hours*3600 + minutes*60 + seconds;
 }
 
+void flush_irqs(void);
+
 void kernel_init(void) {
     /* interrupts disabled */
 
@@ -82,6 +84,8 @@ void kernel_init(void) {
     set_PIC0_mask(0b11111111);
     set_PIC1_mask(0b11111111);
     kprint(KPRN_INFO, "PIC: PIC 0 and 1 remapped and masked.");
+
+    flush_irqs();
 
     init_mouse();
 

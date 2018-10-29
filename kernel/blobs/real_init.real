@@ -63,8 +63,14 @@ mov esp, 0xFFF0
 ; Retrieve arg
 mov ebx, dword [arg]
 
+; Enable ints
+sti
+
 ; Call actual routine
 call 0x8000
+
+; Disable ints
+cli
 
 ; Load intermediate bootstrap GDT
 lgdt [gdt_ptr]

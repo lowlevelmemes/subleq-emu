@@ -1,0 +1,23 @@
+org 0x8000
+bits 16
+
+mov al, 0xff
+out 0x21, al
+out 0xA1, al
+
+mov ebx, 0xfffff
+
+sti
+continue:
+mov cx, 16
+mov di, dummy1
+mov si, dummy2
+rep movsb
+dec ebx
+jnz continue
+cli
+
+ret
+
+dummy1 times 16 db 0
+dummy2 times 16 db 0
