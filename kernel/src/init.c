@@ -79,13 +79,12 @@ void kernel_init(void) {
 
     /* remap PIC where it doesn't bother us */
     kprint(KPRN_INFO, "PIC: Remapping and masking legacy PICs...");
+    flush_irqs();
     map_PIC(0xa0, 0xa8);
     /* mask all PIC IRQs */
     set_PIC0_mask(0b11111111);
     set_PIC1_mask(0b11111111);
     kprint(KPRN_INFO, "PIC: PIC 0 and 1 remapped and masked.");
-
-    flush_irqs();
 
     init_mouse();
 

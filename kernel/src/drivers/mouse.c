@@ -301,38 +301,49 @@ static int is_location_info(mouse_packet_t *p) {
     return 1;
 }
 
+static int handler_cycle = 0;
+static mouse_packet_t current_packet;
+static int discard_packet = 0;
+
 void mouse_handler(void) {
-    uint8_t b;
-    mouse_packet_t packet;
+    switch (handler_cycle) {
+        case 0:
+            current_packet.flags = mouse_read();
+            handler_cycle++;
+            if (current_packet.flags & (1 << 6) || current_packet.flags & (1 << 7))
+                discard_packet = 1;     // discard rest of packet
+            if (!(current_packet.flags & (1 << 3)))
+                discard_packet = 1;     // discard rest of packet
+            break;
+        case 1:
+            current_packet.x_mov = mouse_read();
+            handler_cycle++;
+            break;
+        case 2:
+            current_packet.y_mov = mouse_read();
+            handler_cycle = 0;
 
-    hw_mouse_enabled = 1;
+            if (discard_packet) {
+                discard_packet = 0;
+                break;
+            }
 
-    if (!(((b = port_in_b(0x64)) & 1) && (b & (1 << 5))))
-        return;
+            hw_mouse_enabled = 1;
 
-    /* packet comes from the mouse */
-    /* read packet */
-    packet.flags = port_in_b(0x60);
-    if (!(packet.flags & (1 << 3)))
-        return;
-    mouse_wait(0);
-    packet.x_mov = port_in_b(0x60);
-    mouse_wait(0);
-    packet.y_mov = port_in_b(0x60);
+            dmouse_packet_t dp = process_packet(&current_packet);
+            put_mouse_cursor();
 
-    dmouse_packet_t dp = process_packet(&packet);
-    put_mouse_cursor();
-
-    if (is_location_info(&packet)) {
-        dawn_mouse_click_l = dp.mouse_click_l;
-        dawn_mouse_click_r = dp.mouse_click_r;
-        dawn_mouse_click_m = dp.mouse_click_m;
-        dawn_mouse_x = dp.mouse_x;
-        dawn_mouse_y = dp.mouse_y;
-    } else {
-        if (packet_i == MAX_PACKETS)
-            panic("mouse packets overflow", 0);
-        packets[packet_i++] = dp;
+            if (is_location_info(&current_packet)) {
+                dawn_mouse_click_l = dp.mouse_click_l;
+                dawn_mouse_click_r = dp.mouse_click_r;
+                dawn_mouse_click_m = dp.mouse_click_m;
+                dawn_mouse_x = dp.mouse_x;
+                dawn_mouse_y = dp.mouse_y;
+            } else {
+                if (packet_i == MAX_PACKETS)
+                    panic("mouse packets overflow", 0);
+                packets[packet_i++] = dp;
+            }
     }
 
     return;
@@ -345,24 +356,24 @@ void init_mouse(void) {
     dawn_mouse_x = scale_position(0, vbe_width, 0, 0x100000000, mouse_x);
     dawn_mouse_y = scale_position(0, vbe_height, 0, 0x100000000, mouse_y);
 
-    //Enable the auxiliary mouse device
     mouse_wait(1);
     port_out_b(0x64, 0xA8);
 
-    //Tell the mouse to use default settings
-    mouse_write(0xF6);
-    mouse_read();  //Acknowledge
-
-    //Enable the mouse
-    mouse_write(0xF4);
-    mouse_read();  //Acknowledge
-
+    mouse_wait(1);
     port_out_b(0x64, 0x20);
-    port_out_b(0x80, 0x00);
-    uint8_t status = port_in_b(0x60);
+    uint8_t status = mouse_read();
+    mouse_read();
     status |= (1 << 1);
     status &= ~(1 << 5);
+    mouse_wait(1);
     port_out_b(0x64, 0x60);
-    port_out_b(0x80, 0x00);
+    mouse_wait(1);
     port_out_b(0x60, status);
+    mouse_read();
+
+    mouse_write(0xF6);
+    mouse_read();
+
+    mouse_write(0xF4);
+    mouse_read();
 }

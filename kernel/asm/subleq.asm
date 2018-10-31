@@ -72,9 +72,9 @@ subleq:
         align 16
       .jump_table1:
         times 8 dq .execute_cycle
-        dq shutdown
+        dq .shutdown
         times 7 dq .execute_cycle
-        dq reboot
+        dq .reboot
 
     .execute_cycle:
         ; eip = subleq_cycle(eip);
@@ -117,6 +117,20 @@ subleq:
         mov r9, 1               ; is_halted = 1;
         hlt                     ; halt
         jmp .loop_allcpu               ; continue;
+
+        .shutdown:
+        cli
+        mov rsp, qword [fs:0008]
+        sti
+        mov rax, shutdown
+        call rax
+
+        .reboot:
+        cli
+        mov rsp, qword [fs:0008]
+        sti
+        mov rax, reboot
+        call rax
 
 _readram:
     mov rax, qword [rdi]

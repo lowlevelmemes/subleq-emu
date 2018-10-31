@@ -27,6 +27,15 @@ void reboot(void) {
 
     port_out_b(0x64, 0xfe);
 
+    port_out_b(0x80, 0x00);
+    port_out_b(0x80, 0x00);
+    port_out_b(0x80, 0x00);
+    port_out_b(0x80, 0x00);
+    port_out_b(0x80, 0x00);
+    port_out_b(0x80, 0x00);
+    port_out_b(0x80, 0x00);
+    port_out_b(0x80, 0x00);
+
     kprint(KPRN_INFO, "PM: PS/2 reset failed, triple faulting");
 
     uint64_t dummy_idt_ptr[2] = {0,0};
