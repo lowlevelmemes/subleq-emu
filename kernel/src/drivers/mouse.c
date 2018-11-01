@@ -16,8 +16,6 @@ typedef struct {
 
 static int mouse_x = 0;
 static int mouse_y = 0;
-static int old_mouse_x = 0;
-static int old_mouse_y = 0;
 
 typedef struct {
     int64_t bitmap[16 * 16];
@@ -94,29 +92,39 @@ static inline uint64_t scale_position(uint64_t min, uint64_t max,
     return (oldmax - oldmin) * (val - min) / (max - min) + oldmin;
 }
 
-void put_mouse_cursor(void) {
+static int last_plotted_mouse_x = 0;
+static int last_plotted_mouse_y = 0;
+
+void put_mouse_cursor(int refresh) {
     if (!hw_mouse_enabled) {
         for (size_t x = 0; x < 16; x++) {
             for (size_t y = 0; y < 16; y++) {
-                plot_px(old_mouse_x + x, old_mouse_y + y,
-                    get_ab0_px(old_mouse_x + x, old_mouse_y + y));
+                plot_px(last_plotted_mouse_x + x, last_plotted_mouse_y + y,
+                    get_ab0_px(last_plotted_mouse_x + x, last_plotted_mouse_y + y));
             }
         }
         return;
     }
 
-    for (size_t x = 0; x < 16; x++) {
-        for (size_t y = 0; y < 16; y++) {
-            plot_px(old_mouse_x + x, old_mouse_y + y,
-                get_ab0_px(old_mouse_x + x, old_mouse_y + y));
+    if (!refresh) {
+        for (size_t x = 0; x < 16; x++) {
+            for (size_t y = 0; y < 16; y++) {
+                plot_px(last_plotted_mouse_x + x, last_plotted_mouse_y + y,
+                    get_ab0_px(last_plotted_mouse_x + x, last_plotted_mouse_y + y));
+            }
         }
     }
+
     for (size_t x = 0; x < 16; x++) {
         for (size_t y = 0; y < 16; y++) {
             if (cursor.bitmap[x * 16 + y] != -1)
                 plot_px(mouse_x + x, mouse_y + y, cursor.bitmap[x * 16 + y]);
         }
     }
+
+    last_plotted_mouse_x = mouse_x;
+    last_plotted_mouse_y = mouse_y;
+
     return;
 }
 
@@ -173,9 +181,6 @@ static dmouse_packet_t process_packet(mouse_packet_t *p) {
     else
         y_mov = p->y_mov;
 
-    old_mouse_x = mouse_x;
-    old_mouse_y = mouse_y;
-
     if (mouse_x + x_mov < 0) {
         mouse_x = 0;
     } else if (mouse_x + x_mov >= vbe_width) {
@@ -223,7 +228,7 @@ void mouse_update(void) {
         _readram(335542176 + 6 * 8) ||
         _readram(335542176 + 7 * 8) ||
         _readram(335542176 + 8 * 8) ||
-        _readram(335542176 + 6 * 9)
+        _readram(335542176 + 9 * 8)
     ) return;
 
     if (packet_i) {
@@ -331,7 +336,7 @@ void mouse_handler(void) {
             hw_mouse_enabled = 1;
 
             dmouse_packet_t dp = process_packet(&current_packet);
-            put_mouse_cursor();
+            put_mouse_cursor(0);
 
             if (is_location_info(&current_packet)) {
                 dawn_mouse_click_l = dp.mouse_click_l;

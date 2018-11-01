@@ -28,6 +28,23 @@ void timer_interrupt(void) {
 
         _writeram(335544304, _readram(335544304) + (0x100000000 / KRNL_PIT_FREQ));
 
+        if (cpu_count == 1) {
+            subleq_io_flush();
+
+            if (!(uptime_raw % (KRNL_PIT_FREQ / MOUSE_UPDATE_FREQ)))
+                mouse_update();
+
+            if (!(uptime_raw % (KRNL_PIT_FREQ / SCREEN_REFRESH_FREQ)))
+                subleq_redraw_screen();
+        }
+
+    }
+
+    return;
+}
+
+void timer_interrupt_ap(void) {
+    if (get_cpu_number() == cpu_count - 1) {
         subleq_io_flush();
 
         if (!(uptime_raw % (KRNL_PIT_FREQ / MOUSE_UPDATE_FREQ)))
@@ -35,7 +52,6 @@ void timer_interrupt(void) {
 
         if (!(uptime_raw % (KRNL_PIT_FREQ / SCREEN_REFRESH_FREQ)))
             subleq_redraw_screen();
-
     }
 
     return;

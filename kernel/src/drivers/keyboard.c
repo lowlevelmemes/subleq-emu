@@ -18,28 +18,28 @@ static int capslock_active = 0;
 static int shift_active = 0;
 static int ctrl_active = 0;
 
-static const char ascii_capslock[] = {
+static const uint8_t ascii_capslock[] = {
     '\0', '\e', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\b', '\t',
     'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '[', ']', '\n', '\0', 'A', 'S',
     'D', 'F', 'G', 'H', 'J', 'K', 'L', ';', '\'', '`', '\0', '\\', 'Z', 'X', 'C', 'V',
     'B', 'N', 'M', ',', '.', '/', '\0', '\0', '\0', ' '
 };
 
-static const char ascii_shift[] = {
+static const uint8_t ascii_shift[] = {
     '\0', '\e', '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+', '\b', '\t',
     'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '{', '}', '\n', '\0', 'A', 'S',
     'D', 'F', 'G', 'H', 'J', 'K', 'L', ':', '"', '~', '\0', '|', 'Z', 'X', 'C', 'V',
     'B', 'N', 'M', '<', '>', '?', '\0', '\0', '\0', ' '
 };
 
-static const char ascii_shift_capslock[] = {
+static const uint8_t ascii_shift_capslock[] = {
     '\0', '\e', '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+', '\b', '\t',
     'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '{', '}', '\n', '\0', 'a', 's',
     'd', 'f', 'g', 'h', 'j', 'k', 'l', ':', '"', '~', '\0', '|', 'z', 'x', 'c', 'v',
     'b', 'n', 'm', '<', '>', '?', '\0', '\0', '\0', ' '
 };
 
-static const char ascii_nomod[] = {
+static const uint8_t ascii_nomod[] = {
     '\0', '\e', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\b', '\t',
     'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\n', '\0', 'a', 's',
     'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', '`', '\0', '\\', 'z', 'x', 'c', 'v',
@@ -49,7 +49,7 @@ static const char ascii_nomod[] = {
 static int extra_scancodes = 0;
 
 void keyboard_handler(uint8_t input_byte) {
-    char c;
+    uint8_t c;
 
     if (input_byte == 0xe0) {
         extra_scancodes = 1;
@@ -105,8 +105,10 @@ void keyboard_handler(uint8_t input_byte) {
                 subleq_io_write(335542256, 29);
                 break;
             case CTRL:
+                ctrl_active = 1;
+                break;
             case CTRL_REL:
-                ctrl_active = !ctrl_active;
+                ctrl_active = 0;
                 break;
         }
         return;
@@ -167,15 +169,26 @@ void keyboard_handler(uint8_t input_byte) {
             break;
     }
 
-    if (input_byte == LEFT_SHIFT || input_byte == RIGHT_SHIFT || input_byte == LEFT_SHIFT_REL || input_byte == RIGHT_SHIFT_REL) {
-		shift_active = !shift_active;
-        return;
-    } else if (input_byte == CTRL || input_byte == CTRL_REL) {
-        ctrl_active = !ctrl_active;
-        return;
-    } else if (input_byte == CAPSLOCK) {
-        capslock_active = !capslock_active;
-        return;
+    switch (input_byte) {
+        case LEFT_SHIFT:
+        case RIGHT_SHIFT:
+            shift_active = 1;
+            return;
+        case LEFT_SHIFT_REL:
+        case RIGHT_SHIFT_REL:
+            shift_active = 0;
+            return;
+        case CTRL:
+            ctrl_active = 1;
+            return;
+        case CTRL_REL:
+            ctrl_active = 0;
+            return;
+        case CAPSLOCK:
+            capslock_active = !capslock_active;
+            return;
+        default:
+            break;
     }
 
     if (input_byte < MAX_CODE) {

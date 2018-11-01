@@ -4,6 +4,10 @@
 #include <cio.h>
 #include <acpi.h>
 
+void pm_sleep(void) {
+    kprint(KPRN_WARN, "PM: sleep is not implemented.");
+}
+
 void shutdown(void) {
     asm volatile ("cli");
 
@@ -13,7 +17,18 @@ void shutdown(void) {
     if (facp->PM1b_CNT_BLK)
         port_out_w((uint16_t)facp->PM1b_CNT_BLK, SLP_TYPb | (1 << 13));
 
-    for (;;) { asm volatile ("hlt"); }
+    port_out_b(0x80, 0x00);
+    port_out_b(0x80, 0x00);
+    port_out_b(0x80, 0x00);
+    port_out_b(0x80, 0x00);
+    port_out_b(0x80, 0x00);
+    port_out_b(0x80, 0x00);
+    port_out_b(0x80, 0x00);
+    port_out_b(0x80, 0x00);
+
+    kprint(KPRN_WARN, "PM: Unable to shutdown.");
+
+    asm volatile ("sti");
 }
 
 void reboot(void) {

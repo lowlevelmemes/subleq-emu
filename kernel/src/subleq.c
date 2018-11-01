@@ -120,7 +120,7 @@ void subleq_redraw_screen(void) {
             }
         }
         swap_vbufs();
-        put_mouse_cursor();
+        put_mouse_cursor(1);
     }
 
     return;
