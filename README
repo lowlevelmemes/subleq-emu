@@ -3,14 +3,15 @@ You can download a pre-built ISO here:
 
 Quick readme on how to build:
 
-  - get a x86_64-elf gcc+binutils toolchain and add it to your path
-    google is your friend
+  - Get a x86_64 gcc+binutils toolchain and add it to your path.
+    Your system GCC will be more than enough if you're using a
+    64 bit x86 OS.
 
-  - get nasm
+  - Get nasm.
 
-  - get the latest Dawn ZIP from http://gerigeri.uw.hu/dawn.zip
-    extract and move the Dawn directory to the root of the repo
+  - Get the latest Dawn ZIP from http://gerigeri.uw.hu/dawn.zip
+    Extract and move the Dawn directory to the root of the repo.
 
-  - run "make" in the root of the repository tree
+  - Run "make" in the root of the repository tree.
 
-  - enjoy
+  - Enjoy.
