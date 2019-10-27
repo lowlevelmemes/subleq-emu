@@ -1,22 +1,3 @@
-%macro subleq_loop 1
-    pop rsi
-    pop rbx
-    bswap rsi
-    bswap rbx
-    mov rax, qword [rsi]
-    mov rdx, qword [rbx]
-    bswap rax
-    bswap rdx
-    sub rdx, rax
-    bswap rdx
-    pop rax
-    mov qword [rbx], rdx
-    jg .%1a
-    bswap rax
-    mov rsp, rax
-  .%1a:
-%endmacro
-
 %macro pusham 0
     push rax
     push rbx
@@ -117,16 +98,64 @@ subleq:
 
     .execute_cycle:
         ; eip = subleq_cycle(eip);
-
-        mov rcx, 8192 / 3
+        mov ecx, 8192
 
         .main_loop:
-            subleq_loop 1
-            subleq_loop 2
-            subleq_loop 3
+    dec ecx
+    pop rsi
+    pop rbx
+    bswap rsi
+    bswap rbx
+    movbe rax, qword [rsi]
+    movbe rdx, qword [rbx]
+    pop rsi
+    bswap rsi
+    sub rdx, rax
+    movbe qword [rbx], rdx
+    jg .aa
 
-            dec rcx
-            jnz .main_loop
+    dec ecx
+    movbe rdi, qword [rsi]
+    movbe rbx, qword [rsi+8]
+    movbe rax, qword [rdi]
+    movbe rdx, qword [rbx]
+    movbe rsp, qword [rsi+16]
+    add rsi, 24
+    sub rdx, rax
+    movbe qword [rbx], rdx
+    jg .bb
+
+.aa:
+    dec ecx
+    pop rsi
+    pop rbx
+    bswap rsi
+    bswap rbx
+    movbe rax, qword [rsi]
+    movbe rdx, qword [rbx]
+    pop rsi
+    bswap rsi
+    sub rdx, rax
+    movbe qword [rbx], rdx
+    jg .cc
+
+.bb:
+    dec ecx
+    movbe rdi, qword [rsi]
+    movbe rbx, qword [rsi+8]
+    movbe rax, qword [rdi]
+    movbe rdx, qword [rbx]
+    movbe rsp, qword [rsi+16]
+    add rsi, 24
+    sub rdx, rax
+    movbe qword [rbx], rdx
+    jle .cc
+    mov rsp, rsi
+
+.cc:
+    bt ecx, 31
+    jnc .main_loop
+
 
         test r11, r11
         jz .loop_cpu0
