@@ -51,7 +51,7 @@ void swap_vbufs(void) {
           "+b" (_ab1),
           "+c" (_c)
         :
-        : "rax"
+        : "rax", "memory"
     );
 }
 
