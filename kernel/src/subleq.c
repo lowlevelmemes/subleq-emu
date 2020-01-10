@@ -151,8 +151,8 @@ static void get_cpu_name(char *str) {
         "stosd;"
         "mov eax, ebx;"
         "stosd;"
+        : "+D" (str)
         :
-        : "D" (str)
         : "rax", "rbx", "rcx", "rdx"
     );
 

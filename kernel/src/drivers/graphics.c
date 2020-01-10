@@ -29,6 +29,10 @@ void dump_vga_font(uint8_t *bitmap);
 uint8_t vga_font[4096];
 
 void swap_vbufs(void) {
+    volatile uint32_t *_ab0 = antibuffer0;
+    volatile uint32_t *_ab1 = antibuffer1;
+    volatile uint32_t *_fb  = framebuffer;
+    size_t _c = (vbe_pitch / sizeof(uint32_t)) * vbe_height;
     asm volatile (
         "1: "
         "lodsd;"
@@ -42,15 +46,13 @@ void swap_vbufs(void) {
         "add rbx, 4;"
         "dec rcx;"
         "jnz 1b;"
+        : "+S" (_ab0),
+          "+D" (_fb),
+          "+b" (_ab1),
+          "+c" (_c)
         :
-        : "S" (antibuffer0),
-          "D" (framebuffer),
-          "b" (antibuffer1),
-          "c" ((vbe_pitch / sizeof(uint32_t)) * vbe_height)
         : "rax"
     );
-
-    return;
 }
 
 void plot_px(int x, int y, uint32_t hex) {
