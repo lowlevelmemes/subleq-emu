@@ -239,14 +239,19 @@ handler_wakeup:
         call timer_interrupt_ap
         call eoi
         popam
+
+        mov qword [fs:18], 1
+
         iretq
 
 irq0_handler:
-        ; first execute all the time-based routines (tty refresh...)
         pusham
         call timer_interrupt
         call eoi
         popam
+
+        mov qword [fs:18], 1
+
         iretq
 
 keyboard_isr:

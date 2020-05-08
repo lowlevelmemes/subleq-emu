@@ -8,6 +8,7 @@ typedef struct {
     int cpu_number;
     uint8_t *kernel_stack;
     uint8_t lapic_id;
+    void *subleq_poke_vector;
 } cpu_local_t;
 
 extern cpu_local_t cpu_locals[];

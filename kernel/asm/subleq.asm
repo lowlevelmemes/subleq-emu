@@ -7,8 +7,9 @@ movbe_enabled_msg: db "movbe detected and enabled for subleq emulator", 0
 section .text
 
 subleq_loop_baseline:
+    mov qword [fs:18], 0
+
   .start:
-    dec ecx
     pop rsi
     pop rbx
     bswap rsi
@@ -26,7 +27,6 @@ subleq_loop_baseline:
     mov rsp, rax
 
   .1:
-    dec ecx
     pop rsi
     pop rbx
     bswap rsi
@@ -44,7 +44,6 @@ subleq_loop_baseline:
     mov rsp, rax
 
   .2:
-    dec ecx
     pop rsi
     pop rbx
     bswap rsi
@@ -62,14 +61,14 @@ subleq_loop_baseline:
     mov rsp, rax
 
   .3:
-    bt ecx, 31
-    jnc .start
-
+    cmp qword [fs:18], 0
+    je .start
     jmp subleq.reentry
 
 subleq_loop_movbe:
+    mov qword [fs:18], 0
+
   .start:
-    dec ecx
     pop rsi
     pop rbx
     bswap rsi
@@ -82,7 +81,6 @@ subleq_loop_movbe:
     movbe qword [rbx], rdx
     jg .1
 
-    dec ecx
     movbe rdi, qword [rsi]
     movbe rbx, qword [rsi+8]
     movbe rax, qword [rdi]
@@ -94,7 +92,6 @@ subleq_loop_movbe:
     jg .2
 
   .1:
-    dec ecx
     pop rsi
     pop rbx
     bswap rsi
@@ -108,7 +105,6 @@ subleq_loop_movbe:
     jg .3
 
   .2:
-    dec ecx
     movbe rdi, qword [rsi]
     movbe rbx, qword [rsi+8]
     movbe rax, qword [rdi]
@@ -121,9 +117,8 @@ subleq_loop_movbe:
     mov rsp, rsi
 
   .3:
-    bt ecx, 31
-    jnc .start
-
+    cmp qword [fs:18], 0
+    je .start
     jmp subleq.reentry
 
 %macro pusham 0
@@ -249,8 +244,6 @@ subleq:
 
     .execute_cycle:
         ; eip = subleq_cycle(eip);
-
-        mov rcx, 8192
 
         jmp [subleq_loop]
 

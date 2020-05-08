@@ -71,6 +71,7 @@ static int start_ap(uint8_t target_apic_id, int cpu_number) {
     cpu_local->cpu_number = cpu_number;
     cpu_local->kernel_stack = (void *)&cpu_stacks[cpu_number];
     cpu_local->lapic_id = target_apic_id;
+    cpu_local->subleq_poke_vector = NULL;
 
     /* prepare TSS */
     tss_t *tss = &cpu_tss[cpu_number];
