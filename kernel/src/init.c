@@ -15,8 +15,6 @@
 #include <vga_textmode.h>
 #include <vbe_tty.h>
 
-size_t memory_size;
-
 int get_time(int *seconds, int *minutes, int *hours,
               int *days, int *months, int *years);
 
