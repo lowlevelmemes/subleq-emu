@@ -1,3 +1,5 @@
+global subleq.reentry
+
 section .data
 
 subleq_loop: dq subleq_loop_baseline
@@ -66,7 +68,8 @@ subleq_loop_baseline:
     jmp subleq.reentry
 
 subleq_loop_movbe:
-    mov qword [fs:18], 0
+    mov rsi, .start
+    lock xchg qword [fs:18], rsi
 
   .start:
     pop rsi
@@ -117,9 +120,7 @@ subleq_loop_movbe:
     mov rsp, rsi
 
   .3:
-    cmp qword [fs:18], 0
-    je .start
-    jmp subleq.reentry
+    jmp qword [fs:18]
 
 %macro pusham 0
     push rax
