@@ -105,8 +105,8 @@ void except_page_fault(size_t error_code, size_t fault_rip, size_t fault_cs) {
     kprint(KPRN_ERR, "cr2: %X", ({
         size_t cr2;
         asm volatile (
-            "mov rax, cr2;"
-            : "=a" (cr2)
+            "mov %0, cr2;"
+            : "=r" (cr2)
         );
         cr2;
     }));

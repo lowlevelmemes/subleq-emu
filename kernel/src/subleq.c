@@ -153,7 +153,7 @@ static void get_cpu_name(char *str) {
         "stosd;"
         : "+D" (str)
         :
-        : "rax", "rbx", "rcx", "rdx"
+        : "rax", "rbx", "rcx", "rdx", "memory"
     );
 
     return;
@@ -162,16 +162,17 @@ static void get_cpu_name(char *str) {
 void init_subleq(void) {
     init_cpu0();
 
-    asm volatile ("sti");
+    asm volatile ("sti" ::: "memory");
 
     subleq_acquire_mem();
 
     init_smp();
 
     asm volatile (
-        "mov cr3, rax;"
+        "mov cr3, %0"
         :
-        : "a" ((size_t)subleq_pagemap - PHYS_MEM_OFFSET)
+        : "r" ((size_t)subleq_pagemap - PHYS_MEM_OFFSET)
+        : "memory"
     );
 
     subleq_ready = 1;

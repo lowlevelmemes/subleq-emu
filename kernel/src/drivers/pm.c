@@ -9,7 +9,7 @@ void pm_sleep(void) {
 }
 
 void shutdown(void) {
-    asm volatile ("cli");
+    asm volatile ("cli" ::: "memory");
 
     kprint(KPRN_INFO, "PM: shutdown request");
 
@@ -17,22 +17,16 @@ void shutdown(void) {
     if (facp->PM1b_CNT_BLK)
         port_out_w((uint16_t)facp->PM1b_CNT_BLK, SLP_TYPb | (1 << 13));
 
-    port_out_b(0x80, 0x00);
-    port_out_b(0x80, 0x00);
-    port_out_b(0x80, 0x00);
-    port_out_b(0x80, 0x00);
-    port_out_b(0x80, 0x00);
-    port_out_b(0x80, 0x00);
-    port_out_b(0x80, 0x00);
-    port_out_b(0x80, 0x00);
+    for (int i = 0; i < 100; i++)
+        port_in_b(0x80);
 
     kprint(KPRN_WARN, "PM: Unable to shutdown.");
 
-    asm volatile ("sti");
+    asm volatile ("sti" ::: "memory");
 }
 
 void reboot(void) {
-    asm volatile ("cli");
+    asm volatile ("cli" ::: "memory");
 
     kprint(KPRN_INFO, "PM: reboot request");
 
@@ -42,29 +36,24 @@ void reboot(void) {
 
     port_out_b(0x64, 0xfe);
 
-    port_out_b(0x80, 0x00);
-    port_out_b(0x80, 0x00);
-    port_out_b(0x80, 0x00);
-    port_out_b(0x80, 0x00);
-    port_out_b(0x80, 0x00);
-    port_out_b(0x80, 0x00);
-    port_out_b(0x80, 0x00);
-    port_out_b(0x80, 0x00);
+    for (int i = 0; i < 100; i++)
+        port_in_b(0x80);
 
     kprint(KPRN_INFO, "PM: PS/2 reset failed, triple faulting");
 
     uint64_t dummy_idt_ptr[2] = {0,0};
 
     asm volatile (
-        "lidt [rax];"
+        "lidt [%0];"
         "nop;"
         "nop;"
         "int 0x80;"
         "nop;"
         "nop;"
         :
-        : "a" (dummy_idt_ptr)
+        : "r" (dummy_idt_ptr)
+        : "memory"
     );
 
-    for (;;) { asm volatile ("hlt"); }
+    for (;;) { asm volatile ("hlt" ::: "memory"); }
 }

@@ -3,64 +3,51 @@
 
 #include <stdint.h>
 
-#define BB                      asm volatile ("xchg bx, bx")
-
-#define DISABLE_INTERRUPTS      asm volatile ("cli")
-#define ENABLE_INTERRUPTS       asm volatile ("sti")
-
-#define SYSTEM_HALT              \
-    asm volatile (              \
-                    "1:"        \
-                    "cli;"      \
-                    "hlt;"      \
-                    "jmp 1b;"   \
-                 )
-
 #define port_out_b(port, value) ({				\
-	asm volatile (	"out dx, al"				\
+	asm volatile (	"out %1, al"				\
 					:							\
-					: "a" (value), "d" (port)	\
-					: );						\
+					: "a" (value), "Nd" (port)	\
+					: "memory");						\
 })
 
 #define port_out_w(port, value) ({				\
-	asm volatile (	"out dx, ax"				\
+	asm volatile (	"out %1, ax"				\
 					:							\
-					: "a" (value), "d" (port)	\
-					: );						\
+					: "a" (value), "Nd" (port)	\
+					: "memory");						\
 })
 
 #define port_out_d(port, value) ({				\
-	asm volatile (	"out dx, eax"				\
+	asm volatile (	"out %1, eax"				\
 					:							\
-					: "a" (value), "d" (port)	\
-					: );						\
+					: "a" (value), "Nd" (port)	\
+					: "memory");						\
 })
 
 #define port_in_b(port) ({						\
 	uint8_t value;								\
-	asm volatile (	"in al, dx"					\
+	asm volatile (	"in al, %1"					\
 					: "=a" (value)				\
-					: "d" (port)				\
-					: );						\
+					: "Nd" (port)				\
+					: "memory");						\
 	value;										\
 })
 
 #define port_in_w(port) ({						\
 	uint16_t value;								\
-	asm volatile (	"in ax, dx"					\
+	asm volatile (	"in ax, %1"					\
 					: "=a" (value)				\
-					: "d" (port)				\
-					: );						\
+					: "Nd" (port)				\
+					: "memory");						\
 	value;										\
 })
 
 #define port_in_d(port) ({						\
 	uint32_t value;								\
-	asm volatile (	"in eax, dx"				\
+	asm volatile (	"in eax, %1"				\
 					: "=a" (value)				\
-					: "d" (port)				\
-					: );						\
+					: "Nd" (port)				\
+					: "memory");						\
 	value;										\
 })
 

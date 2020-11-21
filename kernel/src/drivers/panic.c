@@ -6,7 +6,7 @@
 #include <smp.h>
 
 void panic(const char *msg, int code) {
-    DISABLE_INTERRUPTS;
+    asm volatile ("cli" ::: "memory");
     kprint(KPRN_ERR, "!!! KERNEL PANIC !!!");
     kprint(KPRN_ERR, "Panic info: %s", msg);
     kprint(KPRN_ERR, "Error code: %X", (size_t)code);
@@ -18,5 +18,6 @@ void panic(const char *msg, int code) {
         lapic_write(APICREG_ICR0, 0x81);
     }
     kprint(KPRN_ERR, "SYSTEM HALTED");
-    SYSTEM_HALT;
+    for (;;)
+        asm volatile ("hlt" ::: "memory");
 }

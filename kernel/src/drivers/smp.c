@@ -49,10 +49,11 @@ void ap_kernel_entry(void) {
     lapic_enable();
 
     asm volatile (
-        "mov cr3, rax;"
+        "mov cr3, %0;"
         "sti;"
         :
-        : "a" ((size_t)subleq_pagemap - PHYS_MEM_OFFSET)
+        : "r" ((size_t)subleq_pagemap - PHYS_MEM_OFFSET)
+        : "memory"
     );
 
     subleq();
