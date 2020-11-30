@@ -23,6 +23,7 @@ CHARDFLAGS := \
     -std=gnu99 \
     -masm=intel \
     -fno-pic \
+    -mno-80387 \
     -mno-sse \
     -mno-sse2 \
     -mno-red-zone \
