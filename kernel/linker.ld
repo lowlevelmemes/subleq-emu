@@ -5,13 +5,10 @@ SECTIONS
 {
     . = 0xffffffffc0000000 + 0x100000;
 
-    initramfs = 0x1000000;
-    initramfs_end = (initramfs + 256*1024*1024);
-
     .text ALIGN(4K) :
     {
         sections_text = . - 0xffffffffc0000000;
-        KEEP(*(.multiboot))
+        KEEP(*(.startup))
         KEEP(*(.text))
         sections_text_end = . - 0xffffffffc0000000;
     }

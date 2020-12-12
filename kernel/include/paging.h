@@ -8,7 +8,7 @@
 #define PAGE_SIZE               0x200000
 #define PAGE_TABLE_ENTRIES      512
 
-void init_paging(void);
+void init_paging(uintptr_t);
 
 void *kmalloc(size_t);
 void kmfree(void *, size_t);

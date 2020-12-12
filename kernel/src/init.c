@@ -35,7 +35,7 @@ uint64_t get_dawn_epoch(int seconds, int minutes, int hours,
 
 void flush_irqs(void);
 
-void kernel_init(void) {
+void kernel_init(uintptr_t ramdisk_loc) {
     /* interrupts disabled */
 
     #ifdef _KERNEL_VGA_OUTPUT_
@@ -49,7 +49,7 @@ void kernel_init(void) {
     init_e820();
 
     /* initialise paging */
-    init_paging();
+    init_paging(ramdisk_loc);
 
     /* initialise graphics mode */
     init_graphics();
@@ -97,7 +97,7 @@ void kernel_init(void) {
 
     /****** END OF EARLY BOOTSTRAP ******/
 
-    init_subleq();
+    init_subleq(ramdisk_loc);
 
     /* set the date to current time */
     _writeram(335544304, (dawn_epoch + uptime_sec) * 0x100000000);

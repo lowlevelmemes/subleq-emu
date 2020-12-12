@@ -369,5 +369,6 @@ startup:
     mov rbx, GDT
     lgdt [rbx]
 
+    mov rdi, rbp
     mov rax, kernel_init
     call rax

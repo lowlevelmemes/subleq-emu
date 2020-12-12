@@ -6,9 +6,7 @@
 #include <klib.h>
 #include <e820.h>
 
-extern uint8_t initramfs[];
-
-#define MEMORY_BASE ((size_t)(initramfs + 256*1024*1024) + ((size_t)(initramfs + 256*1024*1024) % PAGE_SIZE))
+#define MEMORY_BASE 0x1000000
 #define BITMAP_BASE (MEMORY_BASE / PAGE_SIZE)
 
 static volatile uint32_t *mem_bitmap;
@@ -83,7 +81,7 @@ void kmfree(void *ptr, size_t pages) {
 }
 
 /* Populate bitmap using e820 data. */
-void init_pmm(void) {
+static void init_pmm(uintptr_t ramdisk_loc) {
     mem_bitmap = initial_bitmap;
     if (!(tmp_bitmap = kmalloc(1))) {
         kprint(KPRN_ERR, "kalloc failure in init_pmm(). Halted.");
@@ -119,6 +117,12 @@ void init_pmm(void) {
             if (addr < (MEMORY_BASE + PAGE_SIZE /* bitmap */))
                 continue;
 
+            // skip ramdisk
+            if (addr >= ramdisk_loc && addr < ramdisk_loc + (256*1024*1024)) {
+                wr_bitmap(page, 1);
+                continue;
+            }
+
             if (e820_map[i].type == 1)
                 wr_bitmap(page, 0);
             else
@@ -129,7 +133,7 @@ void init_pmm(void) {
     return;
 }
 
-void init_vmm(void) {
+static void init_vmm(void) {
     kprint(KPRN_INFO, "vmm: Identity mapping memory as specified by the e820...");
 
     for (size_t i = 0; e820_map[i].type; i++) {
@@ -196,8 +200,8 @@ int map_page(pt_entry_t *pml4, size_t phys_addr, size_t virt_addr) {
     return 0;
 }
 
-void init_paging(void) {
-    init_pmm();
+void init_paging(uintptr_t ramdisk_loc) {
+    init_pmm(ramdisk_loc);
     init_vmm();
 
     return;

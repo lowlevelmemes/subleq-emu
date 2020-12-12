@@ -54,13 +54,11 @@ void subleq_io_flush(void) {
 
 static volatile uint64_t last_frame_counter = 0;
 
-extern uint8_t initramfs[];
-
 static uint32_t *dawn_framebuffer;
 
 pt_entry_t *subleq_pagemap;
 
-static void subleq_acquire_mem(void) {
+static void subleq_acquire_mem(uintptr_t ramdisk_loc) {
     subleq_pagemap = kmalloc(1);
     if (!subleq_pagemap)
         for (;;);
@@ -69,7 +67,7 @@ static void subleq_acquire_mem(void) {
 
     /* Map in Dawn */
     for (size_t i = 0; i < (256*1024*1024) / PAGE_SIZE; i++) {
-        map_page(subleq_pagemap, (size_t)initramfs + i * PAGE_SIZE, i * PAGE_SIZE);
+        map_page(subleq_pagemap, ramdisk_loc + i * PAGE_SIZE, i * PAGE_SIZE);
     }
 
     size_t pg;
@@ -159,12 +157,12 @@ static void get_cpu_name(char *str) {
     return;
 }
 
-void init_subleq(void) {
+void init_subleq(uintptr_t ramdisk_loc) {
     init_cpu0();
 
     asm volatile ("sti" ::: "memory");
 
-    subleq_acquire_mem();
+    subleq_acquire_mem(ramdisk_loc);
 
     init_smp();
 
