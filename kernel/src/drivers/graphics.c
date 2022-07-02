@@ -66,26 +66,6 @@ void plot_px(int x, int y, uint32_t hex) {
     return;
 }
 
-uint32_t get_ab0_px(int x, int y) {
-    if (x >= vbe_width || y >= vbe_height)
-        return 0;
-
-    size_t fb_i = x + (vbe_pitch / sizeof(uint32_t)) * y;
-
-    return antibuffer0[fb_i];
-}
-
-void plot_ab0_px(int x, int y, uint32_t hex) {
-    if (x >= vbe_width || y >= vbe_height)
-        return;
-
-    size_t fb_i = x + (vbe_pitch / sizeof(uint32_t)) * y;
-
-    antibuffer0[fb_i] = hex;
-
-    return;
-}
-
 void init_graphics(void) {
     /* interrupts are supposed to be OFF */
 

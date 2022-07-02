@@ -8,56 +8,6 @@
 #include <cio.h>
 #include <tty.h>
 
-size_t memcpy(char *dest, const char *source, size_t count) {
-    return kmemcpy(dest, source, count);
-}
-
-size_t kmemcpy(char *dest, const char *source, size_t count) {
-    size_t i;
-
-    for (i = 0; i < count; i++)
-        dest[i] = source[i];
-
-    return i;
-}
-
-size_t kstrcpy(char *dest, const char *source) {
-    size_t i;
-
-    for (i = 0; source[i]; i++)
-        dest[i] = source[i];
-
-    dest[i] = 0;
-
-    return i;
-}
-
-int kstrcmp(const char *dest, const char *source) {
-    size_t i;
-
-    for (i = 0; dest[i] == source[i]; i++)
-        if ((!dest[i]) && (!source[i])) return 0;
-
-    return 1;
-}
-
-int kstrncmp(const char *dest, const char *source, size_t len) {
-    size_t i;
-
-    for (i = 0; i < len; i++)
-        if (dest[i] != source[i]) return 1;
-
-    return 0;
-}
-
-size_t kstrlen(const char *str) {
-    size_t len;
-
-    for (len = 0; str[len]; len++);
-
-    return len;
-}
-
 typedef struct {
     size_t pages;
     size_t size;
@@ -187,7 +137,7 @@ void kprn_x(uint64_t x) {
     return;
 }
 
-void kprint(int type, const char *fmt, ...) {
+void kprint(kprn_type_t type, const char *fmt, ...) {
     va_list args;
 
     va_start(args, fmt);
