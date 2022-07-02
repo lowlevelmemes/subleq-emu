@@ -10,7 +10,7 @@ section .text
 
 subleq_loop_baseline:
     mov qword [fs:18], 0
-
+    lea rcx, [3]
   .start:
     pop rsi
     pop rbx
@@ -62,13 +62,12 @@ subleq_loop_baseline:
     bswap rax
     mov rsp, rax
 
-  .3:
     cmp qword [fs:18], 0
-    je .start
+    je short .start
     jmp subleq.reentry
 
 subleq_loop_movbe:
-    mov rsi, .start
+    lea rsi, [.start]
     lock xchg qword [fs:18], rsi
 
   .start:
@@ -82,7 +81,7 @@ subleq_loop_movbe:
     bswap rsi
     sub rdx, rax
     movbe qword [rbx], rdx
-    jg .1
+    jg short .1
 
     movbe rdi, qword [rsi]
     movbe rbx, qword [rsi+8]
@@ -92,7 +91,7 @@ subleq_loop_movbe:
     add rsi, 24
     sub rdx, rax
     movbe qword [rbx], rdx
-    jg .2
+    jg short .2
 
   .1:
     pop rsi
@@ -105,7 +104,7 @@ subleq_loop_movbe:
     bswap rsi
     sub rdx, rax
     movbe qword [rbx], rdx
-    jg .3
+    jg short .3
 
   .2:
     movbe rdi, qword [rsi]
@@ -116,7 +115,7 @@ subleq_loop_movbe:
     add rsi, 24
     sub rdx, rax
     movbe qword [rbx], rdx
-    jle .3
+    jle short .3
     mov rsp, rsi
 
   .3:
@@ -174,14 +173,14 @@ subleq:
     mov r11, qword [fs:0000]        ; uint64_t cpu_number;
 
     test r11, r11
-    jnz .no_movbe
+    jnz short .no_movbe
 
     ; check for movbe
-    mov eax, 1
+    lea rax, [1]
     xor ecx, ecx
     cpuid
     bt ecx, 22
-    jnc .no_movbe
+    jnc short .no_movbe
 
     mov rax, subleq_loop_movbe
     mov qword [subleq_loop], rax
@@ -194,23 +193,22 @@ subleq:
     pop r11
 
   .no_movbe:
-
     xor rsp, rsp       ; uint64_t eip = 0;
-    mov r9, 1           ; int is_halted = 1;
+    lea r9, [1]           ; int is_halted = 1;
 
-    mov r10, 334364672  ; uint64_t cpu_bank;
+    lea r10, [334364672]  ; uint64_t cpu_bank;
     mov rax, r11
     shl rax, 4
     add r10, rax
 
-    mov rax, 4              ; _writeram(cpu_bank + 0, 4);        // status
+    lea rax, [4]              ; _writeram(cpu_bank + 0, 4);        // status
     bswap rax
     mov qword [r10], rax
 
     mov qword [r10 + 8], rsp  ; _writeram(cpu_bank + 8, 0);        // EIP
 
     test r11, r11
-    jz .loop_cpu0
+    jz short .loop_cpu0
 
     .loop_allcpu:
         ; check status
@@ -245,7 +243,6 @@ subleq:
 
     .execute_cycle:
         ; eip = subleq_cycle(eip);
-
         jmp [subleq_loop]
 
     .reentry:
@@ -260,21 +257,21 @@ subleq:
         .case1:
         ; active
         test r9, r9             ; if (is_halted) {
-        jz .execute_cycle
+        jz short .execute_cycle
         xor r9, r9              ; is_halted = 0;
         mov rsp, qword [r10 + 8] ; eip = _readram(cpu_bank + 8);
         bswap rsp
-        jmp .execute_cycle
+        jmp short .execute_cycle
 
         .case2:
         ; stop requested
-        mov rax, 4
+        lea rax, [4]
         bswap rax
         mov qword [r10], rax      ; _writeram(cpu_bank + 0, 4);
 
         .case4:
         ; halted
-        mov r9, 1               ; is_halted = 1;
+        lea r9, [1]               ; is_halted = 1;
         hlt                     ; halt
         jmp .loop_allcpu               ; continue;
 
