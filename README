@@ -9,8 +9,8 @@ Quick readme on how to build:
 
   - Get nasm.
 
-  - Get the latest Dawn ZIP from http://gerigeri.uw.hu/dawn.zip
-    or https://mirror.dorper.me/dawn/dawn-latest.zip
+  - Get the latest Dawn ZIP from http://users.atw.hu/gerigeri/DawnOS/download.html
+    or https://cdn.discordapp.com/attachments/939110506554335262/969145614493442078/dawn.zip
     Extract and move the Dawn directory to the root of the repo.
 
   - Run "make" in the root of the repository tree.
