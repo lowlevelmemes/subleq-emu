@@ -8,9 +8,11 @@ movbe_enabled_msg: db "movbe detected and enabled for subleq emulator", 0
 
 section .text
 
+align 8
 subleq_loop_baseline:
     mov qword [fs:18], 0
-    lea rcx, [3]
+  .restart:
+    lea rcx, [.1] ; Set pointer to .1 (1st loop)
   .start:
     pop rsi
     pop rbx
@@ -24,52 +26,25 @@ subleq_loop_baseline:
     bswap rdx
     pop rax
     mov qword [rbx], rdx
-    jg .1
+    jg short .do_early_jmp
     bswap rax
     mov rsp, rax
-
+  .do_early_jmp:
+    jmp rcx
   .1:
-    pop rsi
-    pop rbx
-    bswap rsi
-    bswap rbx
-    mov rax, qword [rsi]
-    mov rdx, qword [rbx]
-    bswap rax
-    bswap rdx
-    sub rdx, rax
-    bswap rdx
-    pop rax
-    mov qword [rbx], rdx
-    jg .2
-    bswap rax
-    mov rsp, rax
-
+    lea rcx, [.2] ; Load the next address (2nd loop)
+    jmp short .start
   .2:
-    pop rsi
-    pop rbx
-    bswap rsi
-    bswap rbx
-    mov rax, qword [rsi]
-    mov rdx, qword [rbx]
-    bswap rax
-    bswap rdx
-    sub rdx, rax
-    bswap rdx
-    pop rax
-    mov qword [rbx], rdx
-    jg .3
-    bswap rax
-    mov rsp, rax
-
+    lea rcx, [.3] ; ... and load the final 3rd address (3rd loop)
+    jmp short .start
+  .3: ; If we finish and the thing(?) is not zero we will jump back
     cmp qword [fs:18], 0
-    je short .start
+    je short .restart
     jmp subleq.reentry
 
 subleq_loop_movbe:
     lea rsi, [.start]
     lock xchg qword [fs:18], rsi
-
   .start:
     pop rsi
     pop rbx
@@ -92,11 +67,10 @@ subleq_loop_movbe:
     sub rdx, rax
     movbe qword [rbx], rdx
     jg short .2
-
   .1:
     pop rsi
-    pop rbx
     bswap rsi
+    pop rbx
     bswap rbx
     movbe rax, qword [rsi]
     movbe rdx, qword [rbx]
@@ -105,7 +79,6 @@ subleq_loop_movbe:
     sub rdx, rax
     movbe qword [rbx], rdx
     jg short .3
-
   .2:
     movbe rdi, qword [rsi]
     movbe rbx, qword [rsi+8]
@@ -181,6 +154,7 @@ subleq:
     cpuid
     bt ecx, 22
     jnc short .no_movbe
+    jmp short .no_movbe
 
     mov rax, subleq_loop_movbe
     mov qword [subleq_loop], rax
