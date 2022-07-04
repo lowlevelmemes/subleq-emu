@@ -43,7 +43,7 @@ CLINKFLAGS := \
     -no-pie \
     -T ./linker.ld
 
-CFLAGS = -Wall -Wextra -O2
+CFLAGS = -Wall -Wextra -O2 -ffast-math -fno-signed-zeros
 
 subleq.bin: $(BINS) $(OBJ) $(H_FILES)
 	$(CC) $(OBJ) $(CLINKFLAGS) -o $@
