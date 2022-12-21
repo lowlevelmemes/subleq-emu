@@ -1,126 +1,52 @@
 global subleq.reentry
 
-section .data
-
-subleq_loop: dq subleq_loop_baseline
-
-movbe_enabled_msg: db "movbe detected and enabled for subleq emulator", 0
-
 section .text
 
-subleq_loop_baseline:
+%macro loop_cycle 0
+    pop rsi
+    pop rbx
+    bswap rsi
+    bswap rbx
+    mov rax, qword [rsi]
+    mov rdx, qword [rbx]
+
+    pop rdi
+
+    cmp rdx, rax
+    je %%eq
+
+    bswap rax
+    bswap rdx
+    sub rdx, rax
+    bswap rdx
+    mov qword [rbx], rdx
+
+    jg %%end
+    jmp %%branch
+
+  %%eq:
+    mov qword [rbx], rcx
+
+  %%branch:
+    bswap rdi
+    mov rsp, rdi
+
+  %%end:
+%endmacro
+
+subleq_loop:
     mov qword [fs:18], 0
 
+    xor rcx, rcx
+
   .start:
-    pop rsi
-    pop rbx
-    bswap rsi
-    bswap rbx
-    mov rax, qword [rsi]
-    mov rdx, qword [rbx]
-    bswap rax
-    bswap rdx
-    sub rdx, rax
-    bswap rdx
-    pop rax
-    mov qword [rbx], rdx
-    jg .1
-    bswap rax
-    mov rsp, rax
+    loop_cycle
+    loop_cycle
+    loop_cycle
 
-  .1:
-    pop rsi
-    pop rbx
-    bswap rsi
-    bswap rbx
-    mov rax, qword [rsi]
-    mov rdx, qword [rbx]
-    bswap rax
-    bswap rdx
-    sub rdx, rax
-    bswap rdx
-    pop rax
-    mov qword [rbx], rdx
-    jg .2
-    bswap rax
-    mov rsp, rax
-
-  .2:
-    pop rsi
-    pop rbx
-    bswap rsi
-    bswap rbx
-    mov rax, qword [rsi]
-    mov rdx, qword [rbx]
-    bswap rax
-    bswap rdx
-    sub rdx, rax
-    bswap rdx
-    pop rax
-    mov qword [rbx], rdx
-    jg .3
-    bswap rax
-    mov rsp, rax
-
-  .3:
     cmp qword [fs:18], 0
     je .start
     jmp subleq.reentry
-
-subleq_loop_movbe:
-    mov rsi, .start
-    lock xchg qword [fs:18], rsi
-
-  .start:
-    pop rsi
-    pop rbx
-    bswap rsi
-    bswap rbx
-    movbe rax, qword [rsi]
-    movbe rdx, qword [rbx]
-    pop rsi
-    bswap rsi
-    sub rdx, rax
-    movbe qword [rbx], rdx
-    jg .1
-
-    movbe rdi, qword [rsi]
-    movbe rbx, qword [rsi+8]
-    movbe rax, qword [rdi]
-    movbe rdx, qword [rbx]
-    movbe rsp, qword [rsi+16]
-    add rsi, 24
-    sub rdx, rax
-    movbe qword [rbx], rdx
-    jg .2
-
-  .1:
-    pop rsi
-    pop rbx
-    bswap rsi
-    bswap rbx
-    movbe rax, qword [rsi]
-    movbe rdx, qword [rbx]
-    pop rsi
-    bswap rsi
-    sub rdx, rax
-    movbe qword [rbx], rdx
-    jg .3
-
-  .2:
-    movbe rdi, qword [rsi]
-    movbe rbx, qword [rsi+8]
-    movbe rax, qword [rdi]
-    movbe rdx, qword [rbx]
-    movbe rsp, qword [rsi+16]
-    add rsi, 24
-    sub rdx, rax
-    movbe qword [rbx], rdx
-    jle .3
-    mov rsp, rsi
-
-  .3:
-    jmp qword [fs:18]
 
 %macro pusham 0
     push rax
@@ -173,28 +99,6 @@ global subleq
 subleq:
     mov r11, qword [fs:0000]        ; uint64_t cpu_number;
 
-    test r11, r11
-    jnz .no_movbe
-
-    ; check for movbe
-    mov eax, 1
-    xor ecx, ecx
-    cpuid
-    bt ecx, 22
-    jnc .no_movbe
-
-    mov rax, subleq_loop_movbe
-    mov qword [subleq_loop], rax
-
-    xor rdi, rdi
-    mov rsi, movbe_enabled_msg
-    extern kprint
-    push r11
-    call kprint
-    pop r11
-
-  .no_movbe:
-
     xor rsp, rsp       ; uint64_t eip = 0;
     mov r9, 1           ; int is_halted = 1;
 
@@ -246,7 +150,7 @@ subleq:
     .execute_cycle:
         ; eip = subleq_cycle(eip);
 
-        jmp [subleq_loop]
+        jmp subleq_loop
 
     .reentry:
         test r11, r11
