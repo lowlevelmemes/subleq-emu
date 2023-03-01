@@ -1,6 +1,3 @@
-You can download a pre-built ISO here:
-  https://github.com/mintsuki/subleq-emu/releases
-
 Quick readme on how to build:
 
   - Get a x86_64 gcc+binutils toolchain and add it to your path.
@@ -10,9 +7,8 @@ Quick readme on how to build:
   - Get nasm.
 
   - Get the latest Dawn ZIP from http://users.atw.hu/gerigeri/DawnOS/download.html
-    or https://cdn.discordapp.com/attachments/939110506554335262/969145614493442078/dawn.zip
     Extract and move the Dawn directory to the root of the repo.
 
-  - Run "make" in the root of the repository tree.
+  - Run "make run" in the root of the repository tree. (Needs qemu-system-x86_64 to run).
 
   - Enjoy.
