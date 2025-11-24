@@ -6,21 +6,21 @@
 #define port_out_b(port, value) ({				\
 	asm volatile (	"out %1, al"				\
 					:							\
-					: "a" (value), "Nd" (port)	\
+					: "a" ((uint8_t)value), "Nd" ((uint16_t)port)	\
 					: "memory");						\
 })
 
 #define port_out_w(port, value) ({				\
 	asm volatile (	"out %1, ax"				\
 					:							\
-					: "a" (value), "Nd" (port)	\
+					: "a" ((uint16_t)value), "Nd" ((uint16_t)port)	\
 					: "memory");						\
 })
 
 #define port_out_d(port, value) ({				\
 	asm volatile (	"out %1, eax"				\
 					:							\
-					: "a" (value), "Nd" (port)	\
+					: "a" ((uint32_t)value), "Nd" ((uint16_t)port)	\
 					: "memory");						\
 })
 
@@ -28,7 +28,7 @@
 	uint8_t value;								\
 	asm volatile (	"in al, %1"					\
 					: "=a" (value)				\
-					: "Nd" (port)				\
+					: "Nd" ((uint16_t)port)				\
 					: "memory");						\
 	value;										\
 })
@@ -37,7 +37,7 @@
 	uint16_t value;								\
 	asm volatile (	"in ax, %1"					\
 					: "=a" (value)				\
-					: "Nd" (port)				\
+					: "Nd" ((uint16_t)port)				\
 					: "memory");						\
 	value;										\
 })
@@ -46,7 +46,7 @@
 	uint32_t value;								\
 	asm volatile (	"in eax, %1"				\
 					: "=a" (value)				\
-					: "Nd" (port)				\
+					: "Nd" ((uint16_t)port)				\
 					: "memory");						\
 	value;										\
 })
