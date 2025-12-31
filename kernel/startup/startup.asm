@@ -361,6 +361,7 @@ startup:
     mov gs, ax
     mov ss, ax
 
+
     mov rax, .higher_half
     jmp rax
   .higher_half:
@@ -368,6 +369,53 @@ startup:
 
     mov rbx, GDT
     lgdt [rbx]
+
+    ; Enable SSE
+    mov rax, cr0
+    and ax, 0xFFFB          ; Clear CR0.EM (bit 2)
+    or ax, 0x2              ; Set CR0.MP (bit 1)
+    mov cr0, rax
+
+    mov rax, cr4
+    or ax, (1 << 9) | (1 << 10)  ; Set CR4.OSFXSR and CR4.OSXMMEXCPT
+    mov cr4, rax
+
+    ; Check for XSAVE (bit 26) and AVX (bit 28) support via CPUID
+    mov eax, 1
+    xor ecx, ecx
+    cpuid
+    mov eax, ecx            ; Save feature flags
+    and eax, (1 << 26) | (1 << 28)
+    cmp eax, (1 << 26) | (1 << 28)
+    jne .no_avx             ; Need both XSAVE and AVX
+
+    ; Enable OSXSAVE in CR4
+    mov rax, cr4
+    bts rax, 18             ; Set CR4.OSXSAVE (bit 18) without clobbering other bits
+    mov cr4, rax
+
+    ; Check for AVX-512F support (CPUID.07H:EBX bit 16)
+    mov eax, 7
+    xor ecx, ecx
+    cpuid
+    test ebx, (1 << 16)
+    jz .avx_only
+
+    ; Enable AVX-512 in XCR0 (bits 0,1,2,5,6,7)
+    xor ecx, ecx            ; XCR0
+    xgetbv
+    or eax, 0xE7            ; Enable x87, SSE, AVX, opmask, ZMM_Hi256, Hi16_ZMM
+    xsetbv
+    jmp .no_avx
+
+  .avx_only:
+    ; Enable AVX in XCR0 (bits 0,1,2)
+    xor ecx, ecx            ; XCR0
+    xgetbv
+    or eax, 0x7             ; Enable x87, SSE, AVX state
+    xsetbv
+
+  .no_avx:
 
     mov rdi, rbp
     mov rax, kernel_init
