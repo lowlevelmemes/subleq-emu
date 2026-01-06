@@ -1,62 +1,101 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdarg.h>
-#include <kernel.h>
 #include <klib.h>
-#include <paging.h>
-#include <system.h>
-#include <cio.h>
-#include <tty.h>
+#include <pmm.h>
+#include <time.h>
+#include <cpu.h>
 
-size_t memcpy(char *dest, const char *source, size_t count) {
-    return kmemcpy(dest, source, count);
+/*
+ * Standard C library memory functions
+ */
+
+void *memcpy(void *restrict dest, const void *restrict src, size_t n) {
+    unsigned char *d = dest;
+    const unsigned char *s = src;
+
+    for (size_t i = 0; i < n; i++)
+        d[i] = s[i];
+
+    return dest;
 }
 
-size_t kmemcpy(char *dest, const char *source, size_t count) {
-    size_t i;
+void *memmove(void *dest, const void *src, size_t n) {
+    unsigned char *d = dest;
+    const unsigned char *s = src;
 
-    for (i = 0; i < count; i++)
-        dest[i] = source[i];
+    if (d < s) {
+        for (size_t i = 0; i < n; i++)
+            d[i] = s[i];
+    } else {
+        for (size_t i = n; i > 0; i--)
+            d[i - 1] = s[i - 1];
+    }
 
-    return i;
+    return dest;
 }
 
-size_t kstrcpy(char *dest, const char *source) {
-    size_t i;
+void *memset(void *s, int c, size_t n) {
+    unsigned char *p = s;
+    unsigned char v = (unsigned char)c;
 
-    for (i = 0; source[i]; i++)
-        dest[i] = source[i];
+    for (size_t i = 0; i < n; i++)
+        p[i] = v;
 
-    dest[i] = 0;
-
-    return i;
+    return s;
 }
 
-int kstrcmp(const char *dest, const char *source) {
-    size_t i;
+int memcmp(const void *s1, const void *s2, size_t n) {
+    const unsigned char *p1 = s1;
+    const unsigned char *p2 = s2;
 
-    for (i = 0; dest[i] == source[i]; i++)
-        if ((!dest[i]) && (!source[i])) return 0;
-
-    return 1;
-}
-
-int kstrncmp(const char *dest, const char *source, size_t len) {
-    size_t i;
-
-    for (i = 0; i < len; i++)
-        if (dest[i] != source[i]) return 1;
+    for (size_t i = 0; i < n; i++) {
+        if (p1[i] != p2[i])
+            return (int)p1[i] - (int)p2[i];
+    }
 
     return 0;
 }
 
-size_t kstrlen(const char *str) {
-    size_t len;
+/*
+ * Standard C library string functions
+ */
 
-    for (len = 0; str[len]; len++);
-
+size_t strlen(const char *s) {
+    size_t len = 0;
+    while (s[len])
+        len++;
     return len;
 }
+
+int strcmp(const char *s1, const char *s2) {
+    while (*s1 && *s1 == *s2) {
+        s1++;
+        s2++;
+    }
+    return (int)(unsigned char)*s1 - (int)(unsigned char)*s2;
+}
+
+int strncmp(const char *s1, const char *s2, size_t n) {
+    for (size_t i = 0; i < n; i++) {
+        if (s1[i] != s2[i])
+            return (int)(unsigned char)s1[i] - (int)(unsigned char)s2[i];
+        if (s1[i] == '\0')
+            return 0;
+    }
+    return 0;
+}
+
+char *strcpy(char *restrict dest, const char *restrict src) {
+    char *ret = dest;
+    while ((*dest++ = *src++))
+        ;
+    return ret;
+}
+
+/*
+ * Kernel memory allocation
+ */
 
 typedef struct {
     size_t pages;
@@ -67,14 +106,14 @@ void *kalloc(size_t size) {
     size_t pages = size / PAGE_SIZE;
     if (size % PAGE_SIZE) pages++;
 
-    // allocate the size in page + allocate an additional page for metadata
+    /* allocate the size in pages + an additional page for metadata */
     char *ptr = kmalloc(pages + 1);
     if (!ptr)
-        return (void*)0;
+        return (void *)0;
 
     ptr += PHYS_MEM_OFFSET;
 
-    kalloc_metadata_t* metadata = (kalloc_metadata_t*)ptr;
+    kalloc_metadata_t *metadata = (kalloc_metadata_t *)ptr;
     ptr += PAGE_SIZE;
 
     metadata->pages = pages;
@@ -102,44 +141,30 @@ void *krealloc(void *addr, size_t new_size) {
 
     char *new_ptr;
     if ((new_ptr = kalloc(new_size)) == 0)
-        return (void*)0;
+        return (void *)0;
 
     if (metadata->size > new_size)
-        kmemcpy(new_ptr, (char *)addr, new_size);
+        memcpy(new_ptr, addr, new_size);
     else
-        kmemcpy(new_ptr, (char *)addr, metadata->size);
+        memcpy(new_ptr, addr, metadata->size);
 
     kfree(addr);
 
     return new_ptr;
 }
 
+/*
+ * Kernel printing
+ */
+
 void kputs(const char *string) {
-
-    for (size_t i = 0; string[i]; i++) {
-      #ifdef _KERNEL_QEMU_OUTPUT_
+    for (size_t i = 0; string[i]; i++)
         port_out_b(0xe9, string[i]);
-      #endif
-      #ifdef _KERNEL_VGA_OUTPUT_
-        tty_putchar(string[i]);
-      #endif
-    }
-
-    return;
 }
 
 void knputs(const char *string, size_t len) {
-
-    for (size_t i = 0; i < len; i++) {
-      #ifdef _KERNEL_QEMU_OUTPUT_
+    for (size_t i = 0; i < len; i++)
         port_out_b(0xe9, string[i]);
-      #endif
-      #ifdef _KERNEL_VGA_OUTPUT_
-        tty_putchar(string[i]);
-      #endif
-    }
-
-    return;
 }
 
 void kprn_ui(uint64_t x) {

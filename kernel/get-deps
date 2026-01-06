@@ -1,0 +1,51 @@
+#! /bin/sh
+
+set -e
+
+srcdir="$(dirname "$0")"
+test -z "$srcdir" && srcdir=.
+
+cd "$srcdir"
+
+clone_repo_commit() {
+    if test -d "$2/.git"; then
+        git -C "$2" reset --hard
+        git -C "$2" clean -fd
+        if ! git -C "$2" -c advice.detachedHead=false checkout $3; then
+            rm -rf "$2"
+        fi
+    else
+        if test -d "$2"; then
+            echo "error: '$2' is not a Git repository" 1>&2
+            exit 1
+        fi
+    fi
+    if ! test -d "$2"; then
+        git clone $1 "$2"
+        if ! git -C "$2" -c advice.detachedHead=false checkout $3; then
+            rm -rf "$2"
+            exit 1
+        fi
+    fi
+}
+
+rm -f .deps-obtained
+
+clone_repo_commit \
+    https://codeberg.org/OSDev/freestnd-c-hdrs-0bsd.git \
+    freestnd-c-hdrs \
+    097259a899d30f0a4b7a694de2de5fdda942e923
+
+clone_repo_commit \
+    https://codeberg.org/OSDev/cc-runtime.git \
+    cc-runtime \
+    dae79833b57a01b9fd3e359ee31def69f5ae899b
+
+clone_repo_commit \
+    https://codeberg.org/Limine/limine-protocol.git \
+    limine-protocol \
+    42e836e30242c2c14f889fd76c6f9a57b0c18ec2
+
+touch .deps-obtained
+
+printf "\nDependencies obtained successfully.\n"

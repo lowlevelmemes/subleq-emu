@@ -1,7 +1,5 @@
-**/*.o
-**/*.elf
-**/*.bin
-**/*.img
-**/*.img.xz
-**/*.zip
-Dawn
+/limine
+/edk2-ovmf
+*.iso
+*.hdd
+/Dawn
