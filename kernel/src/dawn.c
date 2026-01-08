@@ -194,8 +194,7 @@ static void dawn_build_pagemap(uintptr_t ramdisk_loc) {
 
     /* 5. Allocate additional memory for Dawn */
     size_t pg;
-    uint64_t *lastptr = 0;
-    uint64_t *secondlastptr = 0;
+    uint64_t *lastptrs[4] = {0};
 
     for (pg = 0; ; pg++) {
         uint64_t *ptr = kmalloc(1);
@@ -205,19 +204,17 @@ static void dawn_build_pagemap(uintptr_t ramdisk_loc) {
         int map_ret = map_page(dawn_pagemap, (size_t)ptr, virt);
         if (map_ret)
             break;
-        secondlastptr = lastptr;
-        lastptr = (pt_entry_t *)((size_t)ptr + PHYS_MEM_OFFSET);
+        memmove(&lastptrs[1], &lastptrs[0], 3 * sizeof(uint64_t *));
+        lastptrs[0] = (void *)((size_t)ptr + PHYS_MEM_OFFSET);
     }
 
-    /* Fill last 2 pages with 0xff - Dawn expects this at end of memory */
-    if (secondlastptr) {
-        for (size_t i = 0; i < PAGE_SIZE / sizeof(uint64_t); i++) {
-            secondlastptr[i] = 0xffffffffffffffff;
+    /* Fill last 4 pages with 0xff - Dawn expects this at end of memory */
+    for (size_t i = 0; i < 4; i++) {
+        if (lastptrs[i] == NULL) {
+            break;
         }
-    }
-    if (lastptr) {
-        for (size_t i = 0; i < PAGE_SIZE / sizeof(uint64_t); i++) {
-            lastptr[i] = 0xffffffffffffffff;
+        for (size_t j = 0; j < PAGE_SIZE / sizeof(uint64_t); j++) {
+            lastptrs[i][j] = 0xffffffffffffffff;
         }
     }
 
