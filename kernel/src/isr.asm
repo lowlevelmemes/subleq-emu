@@ -217,18 +217,12 @@ handler_security_exception:
         pop rsi
         call except_security_exception
 
-extern subleq.reentry
-
 handler_wakeup:
         pusham
         call timer_interrupt_ap
         call eoi
 
-        mov rax, subleq.reentry
-        xchg qword [fs:16], rax
-
         popam
-
 
         iretq
 
@@ -236,9 +230,6 @@ irq0_handler:
         pusham
         call timer_interrupt
         call eoi
-
-        mov rax, subleq.reentry
-        xchg qword [fs:16], rax
 
         popam
 

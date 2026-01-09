@@ -1,4 +1,3 @@
-global subleq.reentry
 global screen_redraw_avx2
 global screen_redraw_avx512
 
@@ -117,7 +116,7 @@ section .text
 %endmacro
 
 subleq_loop:
-    mov qword [fs:16], 0
+    mov ecx, 4096
 
     cmp qword [rel has_movbe], 0
     jne .start_fast
@@ -130,9 +129,9 @@ subleq_loop:
     loop_cycle
     loop_cycle
 
-    cmp qword [fs:16], 0
-    je .start
-    jmp subleq.reentry
+    sub ecx, 4
+    jz subleq.reentry
+    jmp .start
 
     ; Ultra-fast path with MOVBE + prefetching
     ; 16x unroll: each group = 1 ultra + 3 fast = 4 instructions
@@ -158,9 +157,9 @@ subleq_loop:
     loop_cycle_fast
     loop_cycle_fast
 
-    cmp qword [fs:16], 0
-    je .start_fast
-    jmp subleq.reentry
+    sub ecx, 16
+    jz subleq.reentry
+    jmp .start
 
 %macro pusham 0
     push rax
@@ -251,15 +250,12 @@ subleq:
         jmp [rbx + rax * 8]
         align 16
       .jump_table1:
-        times 8 dq .execute_cycle
+        times 8 dq subleq_loop
         dq .shutdown
-        times 7 dq .execute_cycle
+        times 7 dq subleq_loop
         dq .reboot
-        times 15 dq .execute_cycle
+        times 15 dq subleq_loop
         dq .sleep
-
-    .execute_cycle:
-        jmp subleq_loop
 
     .reentry:
         test r11, r11
@@ -272,12 +268,13 @@ subleq:
 
         .case1:
         ; active
-        test r9, r9             ; if (is_halted) {
-        jz .execute_cycle
+        test r9, r9             ; if (!is_halted) {
+        jz subleq_loop
+                                ; }
         xor r9, r9              ; is_halted = 0;
         mov r12, qword [r10 + 8] ; eip = _readram(cpu_bank + 8);
         bswap r12
-        jmp .execute_cycle
+        jmp subleq_loop
 
         .case2:
         ; stop requested
@@ -295,19 +292,19 @@ subleq:
         pusham
         call shutdown
         popam
-        jmp .execute_cycle
+        jmp subleq_loop
 
         .reboot:
         pusham
         call reboot
         popam
-        jmp .execute_cycle
+        jmp subleq_loop
 
         .sleep:
         pusham
         call pm_sleep
         popam
-        jmp .execute_cycle
+        jmp subleq_loop
 
 ; ============================================================================
 ; AVX2 screen redraw - processes 8 pixels at a time using VPSHUFB
