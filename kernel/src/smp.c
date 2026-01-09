@@ -84,7 +84,6 @@ void cpu0_init(void) {
     cpu_local_t *cpu_local = &cpu_locals[0];
     cpu_local->cpu_number = 0;
     cpu_local->lapic_id = 0;
-    cpu_local->poke_vector = 0;
 
     /* Initialize CPU-local storage */
     cpu_local_init(cpu_local);
@@ -109,7 +108,6 @@ void smp_init(void) {
         cpu_local_t *cpu_local = &cpu_locals[cpu_count];
         cpu_local->cpu_number = cpu_count;
         cpu_local->lapic_id = cpu->lapic_id;
-        cpu_local->poke_vector = 0;
 
         /* BSP is already running */
         if (cpu->lapic_id == mp->bsp_lapic_id) {
