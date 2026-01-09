@@ -220,6 +220,13 @@ static void dawn_build_pagemap(uintptr_t ramdisk_loc) {
 
     kprint(KPRN_INFO, "dawn: Acquired %U MiB total.",
            (DAWN_IMAGE_SIZE + pg * PAGE_SIZE) / (1024 * 1024));
+
+    asm volatile (
+        "movq %0, %%cr3"
+        :
+        : "r" ((size_t)dawn_pagemap - PHYS_MEM_OFFSET)
+        : "memory"
+    );
 }
 
 void dawn_redraw_screen(void) {

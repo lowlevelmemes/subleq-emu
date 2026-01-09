@@ -46,14 +46,8 @@ void kmain(void) {
         hcf();
     }
 
-    /* Enable SSE/AVX for SIMD operations */
-    enable_simd();
-
-    /* Initialize CPU 0 local storage */
-    cpu0_init();
-
-    /* Load IDT */
-    load_IDT();
+    /* Initialise IDT */
+    idt_init();
 
     /* Initialize physical memory manager (sets up hhdm_offset, kernel bases, memmap) */
     pmm_init();
@@ -70,23 +64,17 @@ void kmain(void) {
     /* Initialize APIC (requires APIC pages to be mapped) */
     apic_init();
 
-    /* Start APs via Limine MP (uses its own MP request) */
-    kprint(KPRN_INFO, "About to init SMP...");
-    smp_init();
-    kprint(KPRN_INFO, "SMP init done");
-
     /* Initialize PIT timer */
     set_pit_freq(KRNL_PIT_FREQ);
 
+    /* Start APs via Limine MP (uses its own MP request) */
+    smp_init();
+
     /* Enable interrupts and run emulator */
-    kprint(KPRN_INFO, "Enabling interrupts...");
     asm volatile ("sti");
-    kprint(KPRN_INFO, "Interrupts enabled");
-    kprint(KPRN_INFO, "Calling subleq()...");
 
     /* Pass control to the emulator - this never returns */
     subleq();
-    kprint(KPRN_INFO, "subleq() returned (should never happen)");
 
     hcf();
 }

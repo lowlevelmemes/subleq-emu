@@ -14,7 +14,6 @@ typedef struct {
 extern cpu_local_t cpu_locals[];
 extern int cpu_count;
 
-void cpu0_init(void);
 void smp_init(void);
 int get_cpu_number(void);
 

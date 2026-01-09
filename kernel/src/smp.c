@@ -49,8 +49,8 @@ int get_cpu_number(void) {
 }
 
 /* AP entry point - called by Limine for each AP */
-void ap_entry(struct limine_mp_info *info) {
-    int cpu_num = (int)(uintptr_t)info->extra_argument;
+static void ap_entry(struct limine_mp_info *info) {
+    uint64_t cpu_num = info->extra_argument;
 
     /* Switch to dawn page tables FIRST - Limine's tables may not have APIC MMIO mapped */
     asm volatile (
@@ -64,7 +64,7 @@ void ap_entry(struct limine_mp_info *info) {
     cpu_local_init(&cpu_locals[cpu_num]);
 
     /* Load IDT - required before enabling interrupts */
-    load_IDT();
+    idt_load();
 
     /* Enable SIMD (SSE/AVX/AVX-512) on this CPU */
     enable_simd();
@@ -72,21 +72,13 @@ void ap_entry(struct limine_mp_info *info) {
     /* Enable LAPIC */
     lapic_enable();
 
-    /* Enable interrupts */
-    asm volatile ("sti");
+    if (cpu_locals[cpu_num].lapic_id != mp_request.response->bsp_lapic_id) {
+        /* Enable interrupts */
+        asm volatile ("sti");
 
-    /* Run the SUBLEQ emulator */
-    subleq();
-}
-
-void cpu0_init(void) {
-    /* Set up CPU 0 local struct */
-    cpu_local_t *cpu_local = &cpu_locals[0];
-    cpu_local->cpu_number = 0;
-    cpu_local->lapic_id = 0;
-
-    /* Initialize CPU-local storage */
-    cpu_local_init(cpu_local);
+        /* Run the SUBLEQ emulator */
+        subleq();
+    }
 }
 
 /* Initialize SMP using Limine MP protocol */
@@ -111,9 +103,7 @@ void smp_init(void) {
 
         /* BSP is already running */
         if (cpu->lapic_id == mp->bsp_lapic_id) {
-            /* Update CPU 0 with correct LAPIC ID */
-            cpu_locals[0].lapic_id = cpu->lapic_id;
-            cpu_count++;
+            ap_entry(&(struct limine_mp_info){.extra_argument = cpu_count++});
             continue;
         }
 

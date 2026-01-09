@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <idt.h>
 
 /* IDT entry structure (128 bits for 64-bit mode) */
 typedef struct {
@@ -74,7 +75,7 @@ static void set_idt_entry(uint8_t vector, void (*handler)(void), uint16_t select
 
 #define LIMINE_CS           0x28    /* Limine 64-bit code selector */
 
-void load_IDT(void) {
+void idt_init(void) {
     uint8_t attr = IDT_ATTR_PRESENT | IDT_ATTR_RING0 | IDT_ATTR_INT_GATE;
     uint8_t ist = 0;  /* No IST needed */
 
@@ -124,6 +125,10 @@ void load_IDT(void) {
     }
     set_idt_entry(0xFF, handler_irq_apic, LIMINE_CS, ist, attr);  /* Spurious */
 
+    idt_load();
+}
+
+void idt_load(void) {
     /* Load IDT */
     idt_ptr.limit = sizeof(idt) - 1;
     idt_ptr.base = (uint64_t)&idt;
