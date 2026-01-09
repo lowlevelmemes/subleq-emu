@@ -44,8 +44,6 @@ extern void handler_simd_exception(void);
 extern void handler_virtualisation_exception(void);
 extern void handler_security_exception(void);
 extern void handler_irq_apic(void);
-extern void handler_irq_pic0(void);
-extern void handler_irq_pic1(void);
 extern void handler_wakeup(void);
 extern void irq0_handler(void);
 extern void keyboard_isr(void);
@@ -119,14 +117,6 @@ void load_IDT(void) {
     /* IPI vectors */
     set_idt_entry(0x80, handler_wakeup, LIMINE_CS, ist, attr);    /* Wakeup IPI */
     set_idt_entry(0x81, (void (*)(void))handler_abort, LIMINE_CS, ist, attr);  /* Abort IPI */
-
-    /* Legacy PIC IRQs (0xA0 - 0xAF) - remapped */
-    for (int i = 0xA0; i <= 0xA7; i++) {
-        set_idt_entry(i, handler_irq_pic0, LIMINE_CS, ist, attr);
-    }
-    for (int i = 0xA8; i <= 0xAF; i++) {
-        set_idt_entry(i, handler_irq_pic1, LIMINE_CS, ist, attr);
-    }
 
     /* Additional APIC vectors (0x90 - 0x97, 0xFF) */
     for (int i = 0x90; i <= 0x97; i++) {

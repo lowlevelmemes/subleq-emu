@@ -37,8 +37,6 @@
 ; IDT hooks
 ; ... CPU exceptions
 global handler_irq_apic
-global handler_irq_pic0
-global handler_irq_pic1
 global handler_div0
 global handler_debug
 global handler_nmi
@@ -105,21 +103,6 @@ handler_irq_apic:
         pusham
         call eoi
         popam
-        iretq
-
-handler_irq_pic0:
-        push rax
-        mov al, 0x20    ; acknowledge interrupt to PIC0
-        out 0x20, al
-        pop rax
-        iretq
-
-handler_irq_pic1:
-        push rax
-        mov al, 0x20    ; acknowledge interrupt to both PICs
-        out 0xA0, al
-        out 0x20, al
-        pop rax
         iretq
 
 handler_div0:
