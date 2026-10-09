@@ -7,57 +7,6 @@
 #include <cpu.h>
 
 /*
- * Standard C library memory functions
- */
-
-void *memcpy(void *restrict dest, const void *restrict src, size_t n) {
-    unsigned char *d = dest;
-    const unsigned char *s = src;
-
-    for (size_t i = 0; i < n; i++)
-        d[i] = s[i];
-
-    return dest;
-}
-
-void *memmove(void *dest, const void *src, size_t n) {
-    unsigned char *d = dest;
-    const unsigned char *s = src;
-
-    if (d < s) {
-        for (size_t i = 0; i < n; i++)
-            d[i] = s[i];
-    } else {
-        for (size_t i = n; i > 0; i--)
-            d[i - 1] = s[i - 1];
-    }
-
-    return dest;
-}
-
-void *memset(void *s, int c, size_t n) {
-    unsigned char *p = s;
-    unsigned char v = (unsigned char)c;
-
-    for (size_t i = 0; i < n; i++)
-        p[i] = v;
-
-    return s;
-}
-
-int memcmp(const void *s1, const void *s2, size_t n) {
-    const unsigned char *p1 = s1;
-    const unsigned char *p2 = s2;
-
-    for (size_t i = 0; i < n; i++) {
-        if (p1[i] != p2[i])
-            return (int)p1[i] - (int)p2[i];
-    }
-
-    return 0;
-}
-
-/*
  * Standard C library string functions
  */
 

@@ -1,6 +1,6 @@
 /*
  * subleq-emu kernel entry point
- * Uses Limine boot protocol (base revision 4)
+ * Uses Limine boot protocol (base revision 6)
  */
 
 #include <stdint.h>
@@ -20,9 +20,9 @@
 #include <mouse.h>
 #include <cpu.h>
 
-/* Limine base revision - use revision 4 (latest) */
+/* Limine base revision - use revision 6 (latest) */
 __attribute__((used, section(".limine_requests")))
-static volatile uint64_t limine_base_revision[] = LIMINE_BASE_REVISION(4);
+static volatile uint64_t limine_base_revision[] = LIMINE_BASE_REVISION(6);
 
 /* Request delimiters */
 __attribute__((used, section(".limine_requests_start")))

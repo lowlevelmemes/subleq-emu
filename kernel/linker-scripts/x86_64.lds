@@ -9,10 +9,10 @@ ENTRY(kmain)
 /* process. */
 PHDRS
 {
-    limine_requests PT_LOAD;
-    text PT_LOAD;
-    rodata PT_LOAD;
-    data PT_LOAD;
+    limine_requests PT_LOAD FLAGS(0x06); /* Read, write */
+    text PT_LOAD FLAGS(0x05); /* Read, execute */
+    rodata PT_LOAD FLAGS(0x04); /* Read */
+    data PT_LOAD FLAGS(0x06); /* Read, write */
 }
 
 SECTIONS
@@ -66,9 +66,11 @@ SECTIONS
         *(COMMON)
     } :data
 
-    /* Discard .note.* and .eh_frame* since they may cause issues on some hosts. */
+    /* Discard .note.* and .eh_frame* since they may cause issues on some hosts, */
+    /* and the GOT, which nothing in the kernel needs but some linkers create. */
     /DISCARD/ : {
         *(.eh_frame*)
         *(.note .note.*)
+        *(.got .got.*)
     }
 }

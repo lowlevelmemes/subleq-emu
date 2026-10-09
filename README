@@ -1,10 +1,15 @@
 Quick readme on how to build:
 
-  - Get a x86_64 gcc+binutils toolchain and add it to your path.
-    Your system GCC will be more than enough if you're using a
-    64 bit x86 OS.
+  - Get GNU make (gmake on non-GNU systems) and a GNU-compatible C
+    toolchain capable of generating x86-64 ELF objects, and add it to
+    your path. Your system GCC/binutils or Clang/LLVM/LLD will be more
+    than enough if you're using a 64 bit x86 UNIX-like OS.
 
-  - Get nasm.
+  - Get nasm, git (used by kernel/get-deps to fetch the kernel's
+    dependencies), curl (used to download the Limine release and the
+    EDK2 OVMF firmware images) and xorriso. A C compiler for the host
+    (cc by default, see the HOST_CC make variable) is also needed to
+    build the limine host utility.
 
   - Get the latest Dawn ZIP from http://users.atw.hu/gerigeri/DawnOS/download.html
     Extract and move the Dawn directory to the root of the repo.
@@ -12,3 +17,28 @@ Quick readme on how to build:
   - Run "make run" in the root of the repository tree. (Needs qemu-system-x86_64 to run).
 
   - Enjoy.
+
+Toolchain selection:
+
+  The TOOLCHAIN and TOOLCHAIN_PREFIX make variables can be used to set
+  the toolchain. TOOLCHAIN can be set to llvm to use Clang/LLVM, for
+  example "make TOOLCHAIN=llvm", or "make TOOLCHAIN_PREFIX=x86_64-elf-".
+
+  The kernel is linked through the compiler driver, using its default
+  linker for GCC and LLD for Clang. A different linker can be picked by
+  adding a -fuse-ld= option to LDFLAGS.
+
+  Link-time optimisation can be enabled by adding -flto to CFLAGS, for
+  example "make CFLAGS='-g -O2 -pipe -flto'".
+
+Makefile targets:
+
+  "make all" builds the kernel and a bootable ISO image, and "make all-hdd"
+  builds the kernel and a raw image suitable to be flashed onto a USB stick
+  or hard drive/SSD, which additionally needs sgdisk (usually from the gdisk
+  or gptfdisk packages) and mtools. The size of the raw image, in MiB, is
+  set by the HDD_SIZE make variable.
+
+  "make run" and "make run-hdd" build the respective image and run it in
+  QEMU. The run-uefi and run-hdd-uefi targets are equivalent, except that
+  they boot QEMU using a UEFI-compatible firmware.

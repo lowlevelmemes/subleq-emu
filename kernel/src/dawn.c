@@ -101,7 +101,7 @@ static int should_map_to_hhdm(uint64_t type) {
         case LIMINE_MEMMAP_FRAMEBUFFER:
         case LIMINE_MEMMAP_ACPI_RECLAIMABLE:
         case LIMINE_MEMMAP_ACPI_NVS:
-        case LIMINE_MEMMAP_ACPI_TABLES:
+        case LIMINE_MEMMAP_RESERVED_MAPPED:
             return 1;
         default:
             return 0;
