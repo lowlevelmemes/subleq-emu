@@ -32,6 +32,10 @@
  * dispatchers, which bounds how long a block translated from a word that was
  * changing can survive.
  *
+ * The compiler's word copy loop is recognised and run by jit_copy() for as
+ * many iterations as the budget allows, when nothing that would change what
+ * the loop does is in the way.
+ *
  * Branches are taken when B <= A as signed numbers, as with "sub; jg".
  */
 
@@ -834,6 +838,150 @@ static cval_t shifted(jit_cpu_t *J, cval_t v, int left, int n) {
 /* ------------------------------------------------------------------------ */
 /* translation */
 
+/* The word copy loop the compiler emits: with the A field of instruction 5
+ * (F1), the B field of 15 (F2), and the A and B fields of 14 (F3, F4)
+ * patched with the source and destination pointers, it copies a word from
+ * where S points to where D points, then adds 8 to S, D, and the counter C,
+ * the last time when C was over -8 before:
+ *
+ *    0: T1 T1     1: T2 T2     2: F1 F1     3: S T1      4: T1 F1
+ *    5: [F1] T2   6: T1 T1     7: F2 F2     8: F3 F3     9: F4 F4
+ *   10: D T1     11: T1 F2    12: T1 F3    13: T1 F4    14: [F3] [F4]
+ *   15: T2 [F2]  16: M S/D    17: M D/S    18: M C, back to 0
+ *
+ * with M holding -8, and every C but 18's the next instruction. */
+enum { X_ANY, X_T1, X_T2, X_S, X_D, X_C, X_M, X_F1, X_F2, X_F3, X_F4, X_SD, X_N };
+
+static const uint8_t copy_tmpl[19][2] = {
+    { X_T1, X_T1 }, { X_T2, X_T2 }, { X_F1, X_F1 }, { X_S, X_T1 }, { X_T1, X_F1 },
+    { X_ANY, X_T2 }, { X_T1, X_T1 }, { X_F2, X_F2 }, { X_F3, X_F3 }, { X_F4, X_F4 },
+    { X_D, X_T1 }, { X_T1, X_F2 }, { X_T1, X_F3 }, { X_T1, X_F4 }, { X_ANY, X_ANY },
+    { X_T2, X_ANY }, { X_M, X_SD }, { X_M, X_SD }, { X_M, X_C },
+};
+
+/* whether the loop starts at start, filling desc with start, T1, T2, S, D,
+ * C, and M */
+static int match_copy(uint64_t start, uint64_t *desc) {
+    if (start + 19 * 24 > mem_size)
+        return 0;
+    uint64_t sym[X_N] = { 0 };
+    int bound[X_N] = { 0 };
+    sym[X_F1] = start + 5 * 24;
+    sym[X_F2] = start + 15 * 24 + 8;
+    sym[X_F3] = start + 14 * 24;
+    sym[X_F4] = start + 14 * 24 + 8;
+    bound[X_F1] = bound[X_F2] = bound[X_F3] = bound[X_F4] = 1;
+    uint64_t sd = 0;
+    for (int k = 0; k < 19; k++) {
+        uint64_t p = start + 24ULL * k;
+        if (rd(p + 16) != (k == 18 ? start : p + 24) || bit_get(dyn_map, (p + 16) >> 3))
+            return 0;
+        for (int f = 0; f < 2; f++) {
+            int x = copy_tmpl[k][f];
+            uint64_t v = rd(p + 8 * f);
+            if (x == X_ANY)
+                continue;
+            if (bit_get(dyn_map, (p + 8 * f) >> 3))
+                return 0;
+            if (x == X_SD) {
+                /* S and D in either order */
+                if (k == 16) {
+                    if (v != sym[X_S] && v != sym[X_D])
+                        return 0;
+                    sd = v;
+                } else if (v == sd || (v != sym[X_S] && v != sym[X_D])) {
+                    return 0;
+                }
+                continue;
+            }
+            if (!bound[x]) {
+                sym[x] = v;
+                bound[x] = 1;
+            } else if (sym[x] != v) {
+                return 0;
+            }
+        }
+    }
+    /* the variables are distinct aligned words outside the loop */
+    static const int vars[] = { X_T1, X_T2, X_S, X_D, X_C, X_M };
+    for (int k = 0; k < 6; k++) {
+        uint64_t v = sym[vars[k]];
+        if ((v & 7) || v + 8 > mem_size || (v + 8 > start && v < start + 19 * 24))
+            return 0;
+        for (int j = 0; j < k; j++)
+            if (sym[vars[j]] == v)
+                return 0;
+        desc[k + 1] = v;
+    }
+    desc[0] = start;
+    return 1;
+}
+
+typedef struct {
+    uint64_t n;                     /* iterations run, 0 to run the loop */
+    uint64_t done;                  /* whether that ended the loop */
+} copy_result_t;
+
+/* below this many iterations, the call costs more than it saves */
+#define COPY_MIN 4
+
+static inline int overlaps(uint64_t a, uint64_t alen, uint64_t b, uint64_t blen) {
+    return a < b + blen && b < a + alen;
+}
+
+/* Run the loop desc describes for as many iterations as fit in budget plus
+ * one, from its translated code, when no word it reads or writes is one it
+ * changes otherwise, its code, a device, or translated code, and the copy
+ * does not run forward over itself, where the loop repeats words */
+copy_result_t jit_copy(const uint64_t *desc, uint64_t budget);
+copy_result_t jit_copy(const uint64_t *desc, uint64_t budget) {
+    copy_result_t r = { 0, 0 };
+    uint64_t start = desc[0], t1 = desc[1], t2 = desc[2], sv = desc[3], dv = desc[4], cv = desc[5], mv = desc[6];
+    if ((int64_t)rd(mv) != -8)
+        return r;
+    uint64_t s = rd(sv), d = rd(dv);
+    int64_t c = (int64_t)rd(cv);
+    uint64_t total = c <= -8 ? (uint64_t)(-8 - c) / 8 + 2 : 1;
+    uint64_t n = budget / 19 + 1;
+    if (n > total)
+        n = total;
+    if (n < COPY_MIN)
+        return r;
+    uint64_t bytes = 8 * n;
+    if (s > mem_size || bytes > mem_size - s || d > mem_size || bytes > mem_size - d)
+        return r;
+    if (d > s && d < s + bytes)
+        return r;
+    const uint64_t vars[] = { t1, t2, sv, dv, cv };
+    for (int k = 0; k < 5; k++)
+        if (overlaps(s, bytes, vars[k], 8) || overlaps(d, bytes, vars[k], 8))
+            return r;
+    if (overlaps(d, bytes, mv, 8) || overlaps(s, bytes, start, 19 * 24) ||
+        overlaps(d, bytes, start, 19 * 24) || overlaps(s, bytes, HW_LO, HW_HI - HW_LO) ||
+        overlaps(d, bytes, HW_LO, HW_HI - HW_LO))
+        return r;
+    for (uint64_t pg = d >> 12; pg <= (d + bytes - 1) >> 12; pg++)
+        if (page_map[pg])
+            return r;
+
+    uint64_t last = rd(s + bytes - 8);
+    __builtin_memmove((void *)d, (void *)s, bytes);
+    /* the variables and fields as the last iteration leaves them */
+    uint64_t dl = d + bytes - 8;
+    wr(sv, s + bytes);
+    wr(dv, d + bytes);
+    wr(cv, (uint64_t)c + bytes);
+    wr(t1, -dl);
+    wr(t2, -last);
+    wr(start + 5 * 24, s + bytes - 8);
+    wr(start + 14 * 24, dl);
+    wr(start + 14 * 24 + 8, dl);
+    wr(start + 15 * 24 + 8, dl);
+    r.n = n;
+    r.done = n == total;
+    return r;
+}
+
 static int is_dynamic(jit_cpu_t *J, uint64_t a, uint64_t start) {
     if (bit_get(dyn_map, a >> 3))
         return 1;
@@ -1127,14 +1275,18 @@ static jit_block_t *translate(jit_cpu_t *J, uint64_t start) {
     if ((start & 7) || start + 24 > mem_size)
         return NULL;
     if (J->code_end - J->code_ptr < CODE_SLACK || J->nblocks == J->max_blocks ||
-        J->nmeta + JIT_MAX_BLOCK * 2 > J->max_meta)
+        J->nmeta + JIT_MAX_BLOCK * 2 + 8 > J->max_meta)
         flush(J);
+
+    /* the word copy loop is a block of its own */
+    uint64_t desc[7];
+    int copy = match_copy(start, desc);
 
     /* the extent of the block, and which of its own fields it writes */
     __builtin_memset(J->written, 0, sizeof J->written);
     uint32_t n = 0;
-    for (uint64_t p = start; n < JIT_MAX_BLOCK && p + 24 <= mem_size; p += 24) {
-        if (p != start && lookup(J, p))
+    for (uint64_t p = start; n < (copy ? 19 : JIT_MAX_BLOCK) && p + 24 <= mem_size; p += 24) {
+        if (p != start && !copy && lookup(J, p))
             break;
         uint64_t a = rd(p), b = rd(p + 8), c = rd(p + 16);
         n++;
@@ -1148,6 +1300,9 @@ static jit_block_t *translate(jit_cpu_t *J, uint64_t start) {
         if (!dyn && a == b && c != p + 24)
             break;
     }
+
+    if (n != 19)
+        copy = 0;
 
     /* the words stored to through static addresses, checked once on entry,
      * as nothing else gets translated while the block runs */
@@ -1213,13 +1368,41 @@ static jit_block_t *translate(jit_cpu_t *J, uint64_t start) {
         J->hoist_sites[nhs++] = jcc32(J, CC_NZ);
     }
 
+    int nstubs = 0, nsmc = 0, ended = 0;
+
+    /* the word copy loop: as many iterations as jit_copy() runs, taking
+     * them from the budget past the first, then back to the entry or out;
+     * none means the loop runs below */
+    if (copy) {
+        uint64_t *d = meta_alloc(J, 7);
+        __builtin_memcpy(d, desc, sizeof desc);
+        mov_imm(J, RDI, (uint64_t)d);
+        mov_rr(J, RSI, RBP);
+        mov_imm(J, RAX, (uint64_t)jit_copy);
+        e8(J, 0xff); e8(J, 0xd0);                       /* call rax */
+        test_rr(J, RAX, RAX);
+        uint8_t *none = jcc32(J, 0x4);                  /* jz */
+        e8(J, 0x48); e8(J, 0x6b); e8(J, 0xc8); e8(J, 19);  /* imul rcx, rax, 19 */
+        alu_imm(J, 5, RCX, 19);
+        sub_rr(J, RBP, RCX);
+        test_rr(J, RDX, RDX);
+        stub_t *st = &J->stubs[nstubs++];
+        st->dyn = 0;
+        st->idx = 18;
+        st->target = start + 19 * 24;
+        st->creg = -1;
+        st->pend = (pending_t){ 0, -1, 0, 0 };
+        st->site = jcc32(J, CC_NZ);
+        patch_rel32(jmp32(J), blk->entry);
+        patch_rel32(none, J->cp);
+    }
+
     for (int k = 0; k < NREGS; k++)
         J->regs[k] = (creg_t){ 0 };
     for (int k = 0; k < NCONST; k++)
         J->consts[k].used = 0;
     J->pend = 0;
 
-    int nstubs = 0, nsmc = 0, ended = 0;
     uint32_t i;
     for (i = 0; i < n && !ended; i++)
         ended = translate_insn(J, blk, start + 24ULL * i, i, &nstubs, &nsmc);
