@@ -125,9 +125,16 @@ void acpi_init(void) {
     }
 
     facp = acpi_find_sdt("FACP");
+    if (!facp)
+        panic("ACPI: FADT not found", 0);
 
-    char *dsdt_ptr = (char *)(size_t)facp->dsdt + 36 + PHYS_MEM_OFFSET;
-    size_t dsdt_len = *((uint32_t *)((size_t)facp->dsdt + 4 + PHYS_MEM_OFFSET)) - 36;
+    /* X_DSDT overrides DSDT when set, if the FADT is long enough to have it */
+    uint64_t dsdt = facp->dsdt;
+    if (facp->length >= offsetof(facp_t, X_DSDT) + sizeof(facp->X_DSDT) && facp->X_DSDT)
+        dsdt = facp->X_DSDT;
+
+    char *dsdt_ptr = (char *)(size_t)dsdt + 36 + PHYS_MEM_OFFSET;
+    size_t dsdt_len = *((uint32_t *)((size_t)dsdt + 4 + PHYS_MEM_OFFSET)) - 36;
 
     kprint(0, "DSDT_PTR = %X", dsdt_ptr);
     kprint(0, "DSDT_LEN = %X", dsdt_len);

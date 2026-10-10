@@ -60,6 +60,8 @@ typedef struct {
     uint32_t PM1b_CNT_BLK;
     uint8_t unneeded4[89 - 72];
     uint8_t PM1_CNT_LEN;
+    uint8_t unneeded5[140 - 90];
+    uint64_t X_DSDT;
 } __attribute__((packed)) facp_t;
 
 
