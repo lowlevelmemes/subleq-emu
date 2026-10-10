@@ -91,35 +91,39 @@ static void lapic_set_nmi(uint8_t vec, uint8_t lint) {
 }
 
 static void install_redirs(void) {
+    /* route the IRQs to the BSP, which runs this and which the timer code takes for CPU 0,
+     * as the MADT need not list it first */
+    uint8_t bsp = lapic_read(LAPIC_ID) >> 24;
+
     /* install IRQ 0 ISO */
     for (size_t i = 0; i < iso_ptr; i++) {
         if (isos[i]->irq_source == 0) {
-            ioapic_redirect(isos[i]->irq_source, isos[i]->gsi, isos[i]->flags, local_apics[0]->apic_id);
+            ioapic_redirect(isos[i]->irq_source, isos[i]->gsi, isos[i]->flags, bsp);
             goto irq0_found;
         }
     }
     /* not found in the ISOs, force IRQ 0 */
-    ioapic_redirect(0, 0, 0, local_apics[0]->apic_id);
+    ioapic_redirect(0, 0, 0, bsp);
 irq0_found:
     /* install IRQ 1 ISO */
     for (size_t i = 0; i < iso_ptr; i++) {
         if (isos[i]->irq_source == 1) {
-            ioapic_redirect(isos[i]->irq_source, isos[i]->gsi, isos[i]->flags, local_apics[0]->apic_id);
+            ioapic_redirect(isos[i]->irq_source, isos[i]->gsi, isos[i]->flags, bsp);
             goto irq1_found;
         }
     }
     /* install keyboard redirect (IRQ 1) */
-    ioapic_redirect(1, 1, 0, local_apics[0]->apic_id);
+    ioapic_redirect(1, 1, 0, bsp);
 irq1_found:
     /* install IRQ 12 ISO */
     for (size_t i = 0; i < iso_ptr; i++) {
         if (isos[i]->irq_source == 12) {
-            ioapic_redirect(isos[i]->irq_source, isos[i]->gsi, isos[i]->flags, local_apics[0]->apic_id);
+            ioapic_redirect(isos[i]->irq_source, isos[i]->gsi, isos[i]->flags, bsp);
             goto irq12_found;
         }
     }
     /* install mouse redirect (IRQ 12) */
-    ioapic_redirect(12, 12, 0, local_apics[0]->apic_id);
+    ioapic_redirect(12, 12, 0, bsp);
 irq12_found:
     return;
 }

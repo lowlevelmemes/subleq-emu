@@ -88,11 +88,20 @@ void smp_init(void) {
     if (!mp) return;
 
     kprint(KPRN_INFO, "smp: mp->cpu_count=%U", mp->cpu_count);
-    cpu_count = 0;
+
+    /* The BSP is CPU 0 wherever it is in the list, as it takes the timer IRQ */
+    cpu_locals[0].cpu_number = 0;
+    cpu_locals[0].lapic_id = mp->bsp_lapic_id;
+    cpu_count = 1;
+    ap_entry(&(struct limine_mp_info){.extra_argument = 0});
 
     for (uint64_t i = 0; i < mp->cpu_count; i++) {
         kprint(KPRN_INFO, "smp: Processing CPU %U", i);
         struct limine_mp_info *cpu = mp->cpus[i];
+
+        /* BSP is already running */
+        if (cpu->lapic_id == mp->bsp_lapic_id)
+            continue;
 
         if (cpu_count >= MAX_CPUS) break;
 
@@ -100,12 +109,6 @@ void smp_init(void) {
         cpu_local_t *cpu_local = &cpu_locals[cpu_count];
         cpu_local->cpu_number = cpu_count;
         cpu_local->lapic_id = cpu->lapic_id;
-
-        /* BSP is already running */
-        if (cpu->lapic_id == mp->bsp_lapic_id) {
-            ap_entry(&(struct limine_mp_info){.extra_argument = cpu_count++});
-            continue;
-        }
 
         /* Start AP via Limine */
         cpu->extra_argument = (uint64_t)cpu_count;
