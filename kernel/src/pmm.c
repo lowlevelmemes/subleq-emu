@@ -120,6 +120,14 @@ found:
     return (void *)(strt_page * PAGE_SIZE);
 }
 
+size_t pmm_free_pages(void) {
+    size_t n = 0;
+    for (size_t i = BITMAP_BASE; i < max_page; i++)
+        if (!rd_bitmap(i))
+            n++;
+    return n;
+}
+
 void kmfree(void *ptr, size_t pages) {
     size_t strt_page = (size_t)ptr / PAGE_SIZE;
 

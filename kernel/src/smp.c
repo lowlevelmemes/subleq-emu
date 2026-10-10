@@ -81,6 +81,14 @@ static void ap_entry(struct limine_mp_info *info) {
     }
 }
 
+/* How many CPUs smp_init() will number, which is known before it runs */
+int smp_cpu_total(void) {
+    struct limine_mp_response *mp = mp_request.response;
+    if (!mp || !mp->cpu_count)
+        return 1;
+    return mp->cpu_count < MAX_CPUS ? (int)mp->cpu_count : MAX_CPUS;
+}
+
 /* Initialize SMP using Limine MP protocol */
 void smp_init(void) {
     struct limine_mp_response *mp = mp_request.response;

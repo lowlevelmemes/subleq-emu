@@ -15,6 +15,7 @@ extern cpu_local_t cpu_locals[];
 extern int cpu_count;
 
 void smp_init(void);
+int smp_cpu_total(void);
 int get_cpu_number(void);
 
 #endif

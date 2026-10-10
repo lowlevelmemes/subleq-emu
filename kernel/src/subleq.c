@@ -1,11 +1,44 @@
 #include <stdint.h>
 #include <subleq.h>
 #include <dawn.h>
+#include <jit.h>
 #include <smp.h>
 #include <pm.h>
 
-/* Instructions run between looks at the CPU's bank */
+#ifdef JIT_DEBUG
+#include <klib.h>
+#include <time.h>
+
+/* Log each CPU's speed and translator counters every second */
+static void report(void) {
+    static uint64_t next = 1000, last_t, last[128];
+    if (uptime_raw < next || !jit_enabled)
+        return;
+    uint64_t dt = uptime_raw - last_t;
+    last_t = uptime_raw;
+    next = uptime_raw + 1000;
+    for (int c = 0; c < cpu_count && c < 128; c++) {
+        jit_stats_t *s = jit_get_stats(c);
+        kprint(KPRN_DBG, "cpu %u: %U MIPS, %U blocks, %U KiB code, %U smc words, %U inval, "
+               "%U reval, %U interp, %U flushes, %U links, %U entries",
+               (uint32_t)c, (s->executed - last[c]) / (dt * 1000), s->translations,
+               s->code_bytes >> 10, s->smc_words, s->invalidations, s->revalidations,
+               s->interp_steps, s->flushes, s->links, s->entries);
+        last[c] = s->executed;
+    }
+}
+#endif
+
+/* Instructions run between looks at the CPU's bank; translated code also
+ * leaves as soon as an AP's status changes */
+#define JIT_SLICE 65536
 #define INTERP_SLICE 4096
+
+static uint64_t run(int cpu, uint64_t eip) {
+    if (jit_enabled)
+        return jit_run(cpu, eip, JIT_SLICE);
+    return subleq_interp(eip, INTERP_SLICE);
+}
 
 /* Wait while the bank says the CPU is stopped, which can only change when
  * CPU 0 writes it: Dawn starts and stops CPUs at a fast pace and gives up on
@@ -45,9 +78,16 @@ void subleq(void) {
                     pm_sleep();
                     break;
             }
-            eip = subleq_interp(eip, INTERP_SLICE);
+#ifdef JIT_DEBUG
+            report();
+#endif
+            eip = run(0, eip);
         }
     }
+
+    /* translated code checks the status on every block, to stop at once */
+    if (jit_enabled)
+        jit_set_watch(cpu, bank, 1);
 
     for (;;) {
         switch (dawn_readram(bank)) {
@@ -57,7 +97,7 @@ void subleq(void) {
                     halted = 0;
                     eip = dawn_readram(bank + 8);
                 }
-                eip = subleq_interp(eip, INTERP_SLICE);
+                eip = run(cpu, eip);
                 dawn_writeram(bank + 8, eip);
                 break;
             case 2:

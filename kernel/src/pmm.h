@@ -60,6 +60,7 @@ typedef struct {
 /* Physical memory allocation */
 void *kmalloc(size_t pages);
 void kmfree(void *ptr, size_t pages);
+size_t pmm_free_pages(void);
 
 /* Initialize PMM from Limine memory map */
 void pmm_init(void);

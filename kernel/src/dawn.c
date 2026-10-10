@@ -11,6 +11,10 @@
 #include <smp.h>
 #include <acpi.h>
 #include <cpu.h>
+#include <jit.h>
+
+/* Memory for each CPU's translations: code, block records, and lookup */
+#define JIT_CPU_BYTES (24 * 1024 * 1024)
 
 /* Framebuffer request - sets up graphics globals */
 __attribute__((used, section(".limine_requests")))
@@ -193,7 +197,20 @@ static void dawn_build_pagemap(uintptr_t ramdisk_loc) {
         map_page(dawn_pagemap, ramdisk_loc + i * PAGE_SIZE, DAWN_IMAGE_BASE + i * PAGE_SIZE);
     }
 
-    /* 5. Allocate additional memory for Dawn */
+    /* 5. Set up the translator with part of what is left, sized for all of
+     * it going to Dawn, which gets the rest */
+    uint64_t dawn_max = DAWN_IMAGE_SIZE + pmm_free_pages() * PAGE_SIZE;
+    int ncpus = smp_cpu_total();
+    size_t jit_max = 2 * (dawn_max >> 6) + (size_t)ncpus * JIT_CPU_BYTES;
+    if (jit_max > (dawn_max - DAWN_IMAGE_SIZE) / 8)
+        jit_max = (dawn_max - DAWN_IMAGE_SIZE) / 8;
+    size_t jit_bytes = jit_init(dawn_max, ncpus, jit_max, has_movbe);
+    if (jit_bytes)
+        kprint(KPRN_INFO, "dawn: Translator for %u CPUs took %U MiB.", (uint32_t)ncpus, jit_bytes >> 20);
+    else
+        kprint(KPRN_WARN, "dawn: No memory for the translator, interpreting.");
+
+    /* 6. Allocate additional memory for Dawn */
     size_t pg;
     uint64_t *lastptrs[4] = {0};
 
@@ -221,6 +238,8 @@ static void dawn_build_pagemap(uintptr_t ramdisk_loc) {
 
     kprint(KPRN_INFO, "dawn: Acquired %U MiB total.",
            (DAWN_IMAGE_SIZE + pg * PAGE_SIZE) / (1024 * 1024));
+    if (jit_bytes)
+        jit_set_mem_size(DAWN_IMAGE_SIZE + pg * PAGE_SIZE);
 
     asm volatile (
         "movq %0, %%cr3"
