@@ -5,6 +5,7 @@
 #include <stddef.h>
 
 /* Local APIC register offsets */
+#define LAPIC_ID        0x020   /* Local APIC ID (bits 31:24) */
 #define LAPIC_EOI       0x0B0   /* End of Interrupt */
 #define LAPIC_SVR       0x0F0   /* Spurious Interrupt Vector */
 #define LAPIC_ICR0      0x300   /* Interrupt Command Register (low) */

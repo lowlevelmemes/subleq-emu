@@ -73,17 +73,11 @@ static void ioapic_redirect(uint8_t irq, uint32_t gsi, uint16_t flags, uint8_t a
     ioapic_write(ioapic, ioredtbl + 1, (uint32_t)(redirection >> 32));
 }
 
-static void lapic_set_nmi(uint8_t vec, uint16_t flags, uint8_t lint) {
-    /* set as NMI (delivery mode 0b100 in bits 8-10) and set the desired interrupt vector from the IDT */
+static void lapic_set_nmi(uint8_t vec, uint8_t lint) {
+    /* set as NMI (delivery mode 0b100 in bits 8-10) and set the desired interrupt vector from the IDT;
+     * left edge triggered and active high, whatever the MADT flags say, as the trigger mode only
+     * applies to fixed delivery, Intel wants LINT1 edge triggered, and AMD reserves the polarity bit */
     uint32_t nmi = 0x400 | vec;
-    /* active low */
-    if (flags & 2) {
-        nmi |= 1 << 13;
-    }
-    /* level triggered */
-    if (flags & 8) {
-        nmi |= 1 << 15;
-    }
     if (lint == 1) {
         lapic_write(LAPIC_LINT1, nmi);
     } else if (lint == 0) {
@@ -125,9 +119,26 @@ irq12_found:
     return;
 }
 
+/* whether a MADT local APIC NMI entry is for the processor with this local APIC ID */
+static int nmi_is_for(nmi_t *nmi, uint32_t apic_id) {
+    /* an ACPI processor UID of 0xff means all processors */
+    if (nmi->processor == 0xff)
+        return 1;
+    for (size_t i = 0; i < local_apic_ptr; i++) {
+        if (local_apics[i]->processor_id == nmi->processor)
+            return local_apics[i]->apic_id == apic_id;
+    }
+    return 0;
+}
+
 static void install_nmis(void) {
-    for (size_t i = 0; i < nmi_ptr; i++)
-        lapic_set_nmi(0x90 + i, nmis[i]->flags, nmis[i]->lint);
+    /* an NMI reaches every processor it is wired to, and one stopping the emulator is enough,
+     * so only the BSP takes them */
+    uint32_t apic_id = lapic_read(LAPIC_ID) >> 24;
+    for (size_t i = 0; i < nmi_ptr; i++) {
+        if (nmi_is_for(nmis[i], apic_id))
+            lapic_set_nmi(0x90 + i, nmis[i]->lint);
+    }
     return;
 }
 
@@ -138,11 +149,12 @@ void lapic_enable(void) {
 void apic_init(void) {
     kprint(KPRN_INFO, "APIC: Installing interrupt source overrides...");
     install_redirs();
-    kprint(KPRN_INFO, "APIC: Installing NMIs...");
-    install_nmis();
     /* enable lapic */
     kprint(KPRN_INFO, "APIC: Enabling local APIC...");
     lapic_enable();
+    /* LVT mask bits cannot be cleared while the local APIC is software disabled */
+    kprint(KPRN_INFO, "APIC: Installing NMIs...");
+    install_nmis();
     kprint(KPRN_INFO, "APIC: Done.");
     return;
 }
