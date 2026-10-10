@@ -14,8 +14,9 @@
  * field the block itself writes is dynamic, and so is one caught being
  * written before (dyn_map). The words of static fields are marked in
  * static_map, and every store checks it first: those to static addresses
- * all at once when the block is entered, those to computed ones each time.
- * A hit drops the code translated from the word, which turns dynamic.
+ * all at once when the block is entered, those to computed ones each time,
+ * against a byte per page first. A hit drops the code translated from the
+ * word, which turns dynamic.
  *
  * Within a block, values are cached in registers in native byte order. Every
  * store still goes to memory, so memory is current at the block boundaries
@@ -123,6 +124,11 @@ typedef struct {
     uint8_t *site;
     uint32_t idx;                   /* instruction left before it ran */
     pending_t pend;
+    /* a store to a computed address in a page with translated code, whose
+     * words are checked out of line, going back if they are clear */
+    int precise;
+    int rb, t1, t2;
+    uint8_t *back;
 } smc_t;
 
 typedef struct {
@@ -186,6 +192,11 @@ typedef struct {
 
 static uint64_t mem_size;
 static uint8_t *static_map, *dyn_map;
+
+/* After static_map: a byte per page, set when the page, or the start of the
+ * next one, holds a static field, so that a store's first byte tells */
+static uint8_t *page_map;
+static uint64_t page_off;
 static int ncpus;
 static int use_movbe;
 static jit_cpu_t *cpus[JIT_MAX_CPUS];
@@ -212,6 +223,14 @@ static inline int bit_get(const uint8_t *m, uint64_t w) {
 }
 static inline void bit_set(uint8_t *m, uint64_t w) { __atomic_fetch_or(&m[w >> 3], 1 << (w & 7), __ATOMIC_SEQ_CST); }
 static inline void bit_clr(uint8_t *m, uint64_t w) { __atomic_fetch_and(&m[w >> 3], ~(1 << (w & 7)), __ATOMIC_SEQ_CST); }
+
+static inline void mark_static(uint64_t w) {
+    bit_set(static_map, w);
+    uint64_t pg = (w << 3) >> 12;
+    page_map[pg] = 1;
+    if (pg)
+        page_map[pg - 1] = 1;
+}
 
 static inline void lock(volatile int *l) {
     while (__atomic_exchange_n(l, 1, __ATOMIC_ACQUIRE))
@@ -466,6 +485,16 @@ static void alu_imm(jit_cpu_t *J, int ext, int r, int32_t v) {
 static uint8_t *jcc32(jit_cpu_t *J, uint8_t cc) { e8(J, 0x0f); e8(J, 0x80 + cc); uint8_t *s = J->cp; e32(J, 0); return s; }
 static uint8_t *jmp32(jit_cpu_t *J) { e8(J, 0xe9); uint8_t *s = J->cp; e32(J, 0); return s; }
 static void jmp_r(jit_cpu_t *J, int r) { rex(J, 0, 0, 0, r); e8(J, 0xff); modrm_reg(J, 4, r); }
+
+/* cmp byte [base + index + disp], 0 */
+static void cmp_byte_zero(jit_cpu_t *J, int base, int index, int32_t disp) {
+    rex(J, 0, 0, index, base);
+    e8(J, 0x80);
+    e8(J, 0xbc);                                    /* mod 10, /7, SIB */
+    e8(J, ((index & 7) << 3) | (base & 7));
+    e32(J, (uint32_t)disp);
+    e8(J, 0);
+}
 
 /* test byte [r14 + w / 8], 1 << (w % 8) */
 static void test_bitmap(jit_cpu_t *J, uint64_t w) {
@@ -893,7 +922,7 @@ static int translate_insn(jit_cpu_t *J, jit_block_t *blk, uint64_t p, uint32_t i
             uint32_t bitno = i * 3 + f;
             blk->smask[bitno >> 6] |= 1ULL << (bitno & 63);
             blk->shash = (blk->shash ^ raw[f]) * 0x100000001b3ULL;
-            bit_set(static_map, (p >> 3) + f);
+            mark_static((p >> 3) + f);
         }
     }
 
@@ -926,6 +955,7 @@ static int translate_insn(jit_cpu_t *J, jit_block_t *blk, uint64_t p, uint32_t i
             test_bitmap(J, w);
             J->smcs[*nsmc].idx = i;
             J->smcs[*nsmc].pend = snap_pending(J);
+            J->smcs[*nsmc].precise = 0;
             J->smcs[(*nsmc)++].site = jcc32(J, CC_NZ);
         }
     } else {
@@ -936,22 +966,20 @@ static int translate_insn(jit_cpu_t *J, jit_block_t *blk, uint64_t p, uint32_t i
             load_static(J, rb, p + 8);
             bind(J, rb, p + 8);
         }
-        /* bits (rb >> 3) and ((rb + 7) >> 3) */
+        /* the page's byte here, the words' bits out of line */
         int t1 = scratch(J), t2 = scratch(J);
-        for (int k = 0; k < 2; k++) {
-            if (k == 0)
-                mov_rr(J, t1, rb);
-            else
-                op_mem(J, 0x8d, t1, rb, 7);
-            shr_ri(J, t1, 3);
-            mov_rr(J, t2, t1);
-            shr_ri(J, t2, 6);
-            load_sib8(J, t2, R14, t2);
-            bt_rr(J, t2, t1);
-            J->smcs[*nsmc].idx = i;
-            J->smcs[*nsmc].pend = snap_pending(J);
-            J->smcs[(*nsmc)++].site = jcc32(J, CC_C);
-        }
+        mov_rr(J, t1, rb);
+        shr_ri(J, t1, 12);
+        cmp_byte_zero(J, R14, t1, (int32_t)page_off);
+        smc_t *m = &J->smcs[(*nsmc)++];
+        m->idx = i;
+        m->pend = snap_pending(J);
+        m->precise = 1;
+        m->rb = rb;
+        m->t1 = t1;
+        m->t2 = t2;
+        m->site = jcc32(J, CC_NZ);
+        m->back = J->cp;
         unpin(J, t1);
         unpin(J, t2);
     }
@@ -1225,12 +1253,32 @@ static jit_block_t *translate(jit_cpu_t *J, uint64_t start) {
         alu_imm(J, 0, RBP, (int32_t)n);
         exit_to(J, start, 2);
     }
-    /* a computed one did: instruction idx not run */
+    /* a computed one did, or one went to a page with translated code, whose
+     * words (rb >> 3) and ((rb + 7) >> 3) tell: instruction idx not run */
     for (int k = 0; k < nsmc; k++) {
-        patch_rel32(J->smcs[k].site, J->cp);
-        stub_store(J, &J->smcs[k].pend, -1);
-        alu_imm(J, 0, RBP, (int32_t)(n - J->smcs[k].idx));
-        exit_to(J, start + 24ULL * J->smcs[k].idx, 1);
+        smc_t *m = &J->smcs[k];
+        patch_rel32(m->site, J->cp);
+        if (m->precise) {
+            uint8_t *hit[2];
+            for (int h = 0; h < 2; h++) {
+                if (h == 0)
+                    mov_rr(J, m->t1, m->rb);
+                else
+                    op_mem(J, 0x8d, m->t1, m->rb, 7);
+                shr_ri(J, m->t1, 3);
+                mov_rr(J, m->t2, m->t1);
+                shr_ri(J, m->t2, 6);
+                load_sib8(J, m->t2, R14, m->t2);
+                bt_rr(J, m->t2, m->t1);
+                hit[h] = jcc32(J, CC_C);
+            }
+            patch_rel32(jmp32(J), m->back);
+            patch_rel32(hit[0], J->cp);
+            patch_rel32(hit[1], J->cp);
+        }
+        stub_store(J, &m->pend, -1);
+        alu_imm(J, 0, RBP, (int32_t)(n - m->idx));
+        exit_to(J, start + 24ULL * m->idx, 1);
     }
     /* branches out */
     for (int k = 0; k < nstubs; k++) {
@@ -1291,8 +1339,9 @@ size_t jit_init(uint64_t msize, int n, size_t max_bytes, int movbe) {
     ncpus = n;
     use_movbe = movbe;
 
-    size_t map_bytes = (msize >> 6) + 8;
-    size_t fixed = 2 * map_bytes + n * (sizeof(jit_cpu_t) + (sizeof(jit_block_t *) << HASH_BITS));
+    size_t map_bytes = ((msize >> 6) + 15) & ~7ULL;
+    size_t page_bytes = (msize >> 12) + 1;
+    size_t fixed = 2 * map_bytes + page_bytes + n * (sizeof(jit_cpu_t) + (sizeof(jit_block_t *) << HASH_BITS));
     if (max_bytes <= fixed)
         return 0;
     /* split the rest between the CPUs' code caches and block records, with
@@ -1306,11 +1355,13 @@ size_t jit_init(uint64_t msize, int n, size_t max_bytes, int movbe) {
         return 0;
 
     size_t total = 0;
-    static_map = jit_os_alloc(map_bytes);
+    static_map = jit_os_alloc(map_bytes + page_bytes);
     dyn_map = jit_os_alloc(map_bytes);
     if (!static_map || !dyn_map)
         return 0;
-    total += 2 * map_bytes;
+    page_map = static_map + map_bytes;
+    page_off = map_bytes;
+    total += 2 * map_bytes + page_bytes;
     for (int c = 0; c < n; c++) {
         jit_cpu_t *J = jit_os_alloc(sizeof *J);
         if (!J)
