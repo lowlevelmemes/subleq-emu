@@ -45,7 +45,30 @@ uint64_t has_monitor = 0;
 uint64_t has_avx2 = 0;
 uint64_t has_avx512 = 0;
 
+/* The redraw runs in interrupts and uses SIMD registers, so it saves those of
+ * whatever it interrupts: with XSAVE if it is enabled and its area for what
+ * is enabled fits, else with FXSAVE, which only covers the XMM registers the
+ * SSE2 redraw uses */
+static uint8_t simd_area[4096] __attribute__((aligned(64)));
+static int use_xsave = 0;
+
+static void simd_save(void) {
+    if (use_xsave)
+        asm volatile ("xsave64 %0" : "=m" (simd_area) : "a" (~0U), "d" (~0U));
+    else
+        asm volatile ("fxsave64 %0" : "=m" (simd_area));
+}
+
+static void simd_restore(void) {
+    if (use_xsave)
+        asm volatile ("xrstor64 %0" :: "m" (simd_area), "a" (~0U), "d" (~0U));
+    else
+        asm volatile ("fxrstor64 %0" :: "m" (simd_area));
+}
+
 /* Assembly functions for SIMD screen redraw */
+extern void screen_redraw_sse2(volatile uint32_t *dst, uint32_t *src,
+                               int width, int height, int dst_pitch, int src_pitch);
 extern void screen_redraw_avx2(volatile uint32_t *dst, uint32_t *src,
                                 int width, int height, int dst_pitch, int src_pitch);
 extern void screen_redraw_avx512(volatile uint32_t *dst, uint32_t *src,
@@ -258,42 +281,21 @@ void dawn_redraw_screen(void) {
 
         int pitch_pixels = vbe_pitch / sizeof(uint32_t);
 
-        if (has_avx512) {
+        simd_save();
+        if (use_xsave && has_avx512) {
             /* AVX-512 fast path - processes 16 pixels at a time with VPSHUFB */
             screen_redraw_avx512(antibuffer0, dawn_framebuffer,
                                  vbe_width, vbe_height, pitch_pixels, vbe_width);
-        } else if (has_avx2) {
+        } else if (use_xsave && has_avx2) {
             /* AVX2 fast path - processes 8 pixels at a time with VPSHUFB */
             screen_redraw_avx2(antibuffer0, dawn_framebuffer,
                                vbe_width, vbe_height, pitch_pixels, vbe_width);
         } else {
-            /* Scalar fallback */
-            for (int y = 0; y < vbe_height; y++) {
-                uint32_t *src = dawn_framebuffer + y * vbe_width;
-                volatile uint32_t *dst = antibuffer0 + y * pitch_pixels;
-
-                int x = 0;
-                /* Process 4 pixels at a time */
-                for (; x + 4 <= vbe_width; x += 4) {
-                    uint32_t v0 = src[x], v1 = src[x+1], v2 = src[x+2], v3 = src[x+3];
-                    asm volatile (
-                        "roll $8, %%eax; bswapl %%eax;"
-                        "roll $8, %%ebx; bswapl %%ebx;"
-                        "roll $8, %%ecx; bswapl %%ecx;"
-                        "roll $8, %%edx; bswapl %%edx;"
-                        : "=a"(v0), "=b"(v1), "=c"(v2), "=d"(v3)
-                        : "a"(v0), "b"(v1), "c"(v2), "d"(v3)
-                    );
-                    dst[x] = v0; dst[x+1] = v1; dst[x+2] = v2; dst[x+3] = v3;
-                }
-                /* Handle remaining pixels */
-                for (; x < vbe_width; x++) {
-                    uint32_t val = src[x];
-                    asm volatile ("roll $8, %%eax; bswapl %%eax" : "=a"(val) : "a"(val));
-                    dst[x] = val;
-                }
-            }
+            /* SSE2, which x86-64 always has - 4 pixels at a time */
+            screen_redraw_sse2(antibuffer0, dawn_framebuffer,
+                               vbe_width, vbe_height, pitch_pixels, vbe_width);
         }
+        simd_restore();
         swap_vbufs();
         put_mouse_cursor(1);
     }
@@ -365,6 +367,11 @@ static void detect_cpu_features(void) {
         has_avx2 = 0;
         return;
     }
+
+    /* The size of the XSAVE area for the state enabled in XCR0 */
+    uint32_t a = 0xd, b, c = 0, d;
+    asm volatile ("cpuid" : "+a" (a), "=b" (b), "+c" (c), "=d" (d));
+    use_xsave = b <= sizeof(simd_area);
 
     /* CPUID.07H for AVX2 and AVX-512 */
     asm volatile (

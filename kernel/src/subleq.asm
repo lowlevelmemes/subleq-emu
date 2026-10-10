@@ -1,3 +1,4 @@
+global screen_redraw_sse2
 global screen_redraw_avx2
 global screen_redraw_avx512
 
@@ -11,6 +12,11 @@ pixel_shuffle_mask:
     db 2, 1, 0, 3, 6, 5, 4, 7, 10, 9, 8, 11, 14, 13, 12, 15
     db 2, 1, 0, 3, 6, 5, 4, 7, 10, 9, 8, 11, 14, 13, 12, 15
     db 2, 1, 0, 3, 6, 5, 4, 7, 10, 9, 8, 11, 14, 13, 12, 15
+    ; For SSE2, which has no byte shuffle: bytes 1 and 3 stay, 0 and 2 swap
+pixel_keep_mask:
+    times 4 dd 0xff00ff00
+pixel_low_mask:
+    times 4 dd 0x000000ff
 
 section .text
 
@@ -56,6 +62,95 @@ subleq_interp:
     jnz .loop
 
     mov rax, r12
+    pop r12
+    pop rbx
+    ret
+
+; ============================================================================
+; SSE2 screen redraw - processes 4 pixels at a time, swapping bytes 0 and 2
+; of each with masks and shifts
+; void screen_redraw_sse2(volatile uint32_t *dst, uint32_t *src,
+;                         int width, int height, int dst_pitch, int src_pitch)
+; rdi = dst, rsi = src, edx = width, ecx = height, r8d = dst_pitch, r9d = src_pitch
+; ============================================================================
+screen_redraw_sse2:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+
+    ; Save all parameters
+    mov r10d, edx           ; width
+    mov r11d, ecx           ; height
+    mov r12d, r8d           ; dst_pitch (in pixels)
+    mov r13d, r9d           ; src_pitch (in pixels)
+
+    ; Load masks
+    movdqa xmm14, [rel pixel_keep_mask]
+    movdqa xmm15, [rel pixel_low_mask]
+
+    xor r14d, r14d          ; y = 0
+
+.sse2_row_loop:
+    cmp r14d, r11d
+    jge .sse2_done
+
+    ; Calculate src_row = src + y * src_pitch (in pixels, then scale by 4)
+    mov eax, r14d
+    imul eax, r13d          ; y * src_pitch (pixels)
+    lea rcx, [rsi + rax*4]  ; src + y * src_pitch * 4
+
+    ; Calculate dst_row = dst + y * dst_pitch (in pixels, then scale by 4)
+    mov eax, r14d
+    imul eax, r12d          ; y * dst_pitch (pixels)
+    lea rbx, [rdi + rax*4]  ; dst + y * dst_pitch * 4
+
+    xor r15d, r15d          ; x = 0
+
+.sse2_col_loop:
+    mov eax, r10d
+    sub eax, r15d           ; remaining = width - x
+    cmp eax, 4
+    jl .sse2_scalar_tail
+
+    ; Process 4 pixels: (p & 0xff00ff00) | ((p >> 16) & 0xff) | ((p << 24) >> 8)
+    movdqu xmm0, [rcx + r15*4]
+    movdqa xmm1, xmm0
+    movdqa xmm2, xmm0
+    pand xmm0, xmm14
+    psrld xmm1, 16
+    pand xmm1, xmm15
+    pslld xmm2, 24
+    psrld xmm2, 8
+    por xmm0, xmm1
+    por xmm0, xmm2
+    movdqu [rbx + r15*4], xmm0
+
+    add r15d, 4
+    jmp .sse2_col_loop
+
+.sse2_scalar_tail:
+    cmp r15d, r10d
+    jge .sse2_next_row
+
+    ; Process one pixel with scalar code
+    mov eax, [rcx + r15*4]
+    rol eax, 8
+    bswap eax
+    mov [rbx + r15*4], eax
+
+    inc r15d
+    jmp .sse2_scalar_tail
+
+.sse2_next_row:
+    inc r14d
+    jmp .sse2_row_loop
+
+.sse2_done:
+    pop r15
+    pop r14
+    pop r13
     pop r12
     pop rbx
     ret
