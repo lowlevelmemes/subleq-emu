@@ -52,6 +52,7 @@ extern int dawn_ready;
 
 /* CPU feature flags (detected by dawn_init) */
 extern uint64_t has_movbe;
+extern uint64_t has_monitor;
 extern uint64_t has_avx2;
 extern uint64_t has_avx512;
 

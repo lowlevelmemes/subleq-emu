@@ -11,9 +11,11 @@ void timer_interrupt(void) {
     uptime_raw++;
 
     if (dawn_ready) {
-        /* raise vector 0x80 for all APs */
-        for (int i = 1; i < cpu_count; i++) {
-            lapic_write(LAPIC_ICR1, ((uint32_t)cpu_locals[i].lapic_id) << 24);
+        /* raise vector 0x80 on the last AP, which flushes I/O, updates the
+         * mouse, and redraws the screen; the others need no ticks, as they
+         * wait for Dawn to start them without halting */
+        if (cpu_count > 1) {
+            lapic_write(LAPIC_ICR1, ((uint32_t)cpu_locals[cpu_count - 1].lapic_id) << 24);
             lapic_write(LAPIC_ICR0, 0x80);
         }
 

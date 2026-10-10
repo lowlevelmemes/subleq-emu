@@ -7,6 +7,21 @@
 /* Instructions run between looks at the CPU's bank */
 #define INTERP_SLICE 4096
 
+/* Wait while the bank says the CPU is stopped, which can only change when
+ * CPU 0 writes it: Dawn starts and stops CPUs at a fast pace and gives up on
+ * those that do not answer soon */
+static void wait_stopped(uint64_t bank) {
+    while (dawn_readram(bank) == 4) {
+        if (has_monitor) {
+            asm volatile ("monitor" :: "a" (bank), "c" (0), "d" (0) : "memory");
+            if (dawn_readram(bank) == 4)
+                asm volatile ("mwait" :: "a" (0), "c" (0) : "memory");
+        } else {
+            asm volatile ("pause" ::: "memory");
+        }
+    }
+}
+
 void subleq(void) {
     int cpu = get_cpu_number();
     uint64_t bank = DAWN_CPU_BANK_BASE + 16 * (uint64_t)cpu;
@@ -52,7 +67,7 @@ void subleq(void) {
             case 4:
                 /* stopped */
                 halted = 1;
-                asm volatile ("hlt");
+                wait_stopped(bank);
                 break;
             default:
                 asm volatile ("pause");

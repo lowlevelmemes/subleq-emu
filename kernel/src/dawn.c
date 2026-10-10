@@ -37,6 +37,7 @@ int dawn_ready = 0;
 
 /* CPU feature flags (written by detect_cpu_features) */
 uint64_t has_movbe = 0;
+uint64_t has_monitor = 0;
 uint64_t has_avx2 = 0;
 uint64_t has_avx512 = 0;
 
@@ -321,8 +322,9 @@ static void detect_cpu_features(void) {
         :
         : "eax", "ebx", "edx"
     );
-    /* MOVBE is bit 22 of ECX */
+    /* MOVBE is bit 22 of ECX, MONITOR (with MWAIT) bit 3 */
     has_movbe = (ecx >> 22) & 1;
+    has_monitor = (ecx >> 3) & 1;
 
     /* Check if AVX is supported (bit 28) AND OSXSAVE is enabled (bit 27) */
     /* OSXSAVE (bit 27) indicates the OS has enabled XSAVE - required for AVX */
