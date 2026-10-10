@@ -40,8 +40,10 @@ uint16_t SLP_TYPb;
 void *acpi_find_sdt(const char *signature) {
     acpi_sdt_t *ptr;
 
+    /* the lengths are in bytes and include the header before the entries */
     if (use_xsdt) {
-        for (size_t i = 0; i < xsdt->sdt.length; i++) {
+        size_t entries = (xsdt->sdt.length - sizeof(acpi_sdt_t)) / sizeof(xsdt->sdt_ptr[0]);
+        for (size_t i = 0; i < entries; i++) {
             ptr = (acpi_sdt_t *)((size_t)xsdt->sdt_ptr[i] + PHYS_MEM_OFFSET);
             if (!strncmp(ptr->signature, signature, 4)) {
                 kprint(KPRN_INFO, "acpi: Found \"%s\" at %X", signature, (size_t)ptr);
@@ -49,7 +51,8 @@ void *acpi_find_sdt(const char *signature) {
             }
         }
     } else {
-        for (size_t i = 0; i < rsdt->sdt.length; i++) {
+        size_t entries = (rsdt->sdt.length - sizeof(acpi_sdt_t)) / sizeof(rsdt->sdt_ptr[0]);
+        for (size_t i = 0; i < entries; i++) {
             ptr = (acpi_sdt_t *)((size_t)rsdt->sdt_ptr[i] + PHYS_MEM_OFFSET);
             if (!strncmp(ptr->signature, signature, 4)) {
                 kprint(KPRN_INFO, "acpi: Found \"%s\" at %X", signature, (size_t)ptr);
