@@ -52,9 +52,6 @@ void kmain(void) {
     /* Initialize physical memory manager (sets up hhdm_offset, kernel bases, memmap) */
     pmm_init();
 
-    /* Initialize mouse */
-    mouse_init();
-
     /* Initialize ACPI (uses its own RSDP request) */
     acpi_init();
 
@@ -63,6 +60,9 @@ void kmain(void) {
 
     /* Initialize Dawn emulator (framebuffer, module, date, pagemap, switches CR3) */
     dawn_init();
+
+    /* Initialise mouse (centres the pointer on the framebuffer set up by dawn_init()) */
+    mouse_init();
 
     /* Initialize APIC (requires APIC pages to be mapped) */
     apic_init();
