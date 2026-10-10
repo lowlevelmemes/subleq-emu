@@ -6,11 +6,9 @@
 #include <dawn.h>
 
 volatile uint64_t uptime_raw = 0;
-volatile uint64_t uptime_sec = 0;
 
 void timer_interrupt(void) {
-    if (!(++uptime_raw % KRNL_PIT_FREQ))
-        uptime_sec++;
+    uptime_raw++;
 
     if (dawn_ready) {
         /* raise vector 0x80 for all APs */

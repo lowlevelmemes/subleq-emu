@@ -4,6 +4,7 @@
 #include <klib.h>
 #include <pmm.h>
 #include <time.h>
+#include <pit.h>
 #include <cpu.h>
 
 /*
@@ -166,9 +167,12 @@ void kprint(int type, const char *fmt, ...) {
 
     va_start(args, fmt);
 
-    /* print timestamp */
-    kputs("["); kprn_ui(uptime_sec); kputs(".");
-    kprn_ui(uptime_raw); kputs("] ");
+    /* print timestamp, in seconds and milliseconds from one read of the tick count */
+    uint64_t ticks = uptime_raw;
+    uint64_t ms = ticks % KRNL_PIT_FREQ * 1000 / KRNL_PIT_FREQ;
+    char ms_str[] = { '0' + ms / 100, '0' + ms / 10 % 10, '0' + ms % 10, 0 };
+    kputs("["); kprn_ui(ticks / KRNL_PIT_FREQ); kputs(".");
+    kputs(ms_str); kputs("] ");
 
     switch (type) {
         case KPRN_INFO:
