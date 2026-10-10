@@ -442,6 +442,9 @@ static void sub_rr(jit_cpu_t *J, int dst, int src) { rex(J, 1, src, 0, dst); e8(
 static void neg_r(jit_cpu_t *J, int r) { rex(J, 1, 0, 0, r); e8(J, 0xf7); modrm_reg(J, 3, r); }
 static void test_rr(jit_cpu_t *J, int a, int b) { rex(J, 1, b, 0, a); e8(J, 0x85); modrm_reg(J, b, a); }
 static void shr_ri(jit_cpu_t *J, int r, uint8_t n) { rex(J, 1, 0, 0, r); e8(J, 0xc1); modrm_reg(J, 5, r); e8(J, n); }
+static void shl_ri(jit_cpu_t *J, int r, uint8_t n) { rex(J, 1, 0, 0, r); e8(J, 0xc1); modrm_reg(J, 4, r); e8(J, n); }
+static void or_rr(jit_cpu_t *J, int dst, int src) { rex(J, 1, src, 0, dst); e8(J, 0x09); modrm_reg(J, src, dst); }
+static void and_rr(jit_cpu_t *J, int dst, int src) { rex(J, 1, src, 0, dst); e8(J, 0x21); modrm_reg(J, src, dst); }
 static void bt_rr(jit_cpu_t *J, int base, int bit) { rex(J, 1, bit, 0, base); e8(J, 0x0f); e8(J, 0xa3); modrm_reg(J, bit, base); }
 
 /* leaves the flags alone */
@@ -606,8 +609,38 @@ static void load_static(jit_cpu_t *J, int r, uint64_t a) {
     }
 }
 
-/* the value at a static address, from the cache or loaded and cached */
+static cval_t shifted(jit_cpu_t *J, cval_t v, int left, int n);
+static void or_val(jit_cpu_t *J, int r, cval_t v);
+
+/* the value at a static address, from the cache or loaded and cached; an
+ * unaligned one is put together from the two words it spans when either is
+ * cached, as its load could not be forwarded from their stores */
 static cval_t get_static(jit_cpu_t *J, uint64_t a) {
+    if ((a & 7) && cacheable(a & ~7ULL) && cacheable((a & ~7ULL) + 8)) {
+        int k = (a & 7) * 8;
+        cval_t lo = cache_find(J, a & ~7ULL), hi = cache_find(J, (a & ~7ULL) + 8);
+        if (lo.kind || hi.kind) {
+            if (lo.kind == 1)
+                pin(J, lo.reg);
+            if (hi.kind == 1)
+                pin(J, hi.reg);
+            if (!lo.kind)
+                lo = get_static(J, a & ~7ULL);
+            if (!hi.kind)
+                hi = get_static(J, (a & ~7ULL) + 8);
+            /* (lo << k) | (hi >> (64 - k)) */
+            cval_t v = shifted(J, lo, 1, k), h = shifted(J, hi, 0, 64 - k);
+            if (v.kind == 2 && h.kind == 2)
+                return (cval_t){ 2, -1, v.val | h.val };
+            if (v.kind == 2) {
+                cval_t t = v;
+                v = h;
+                h = t;
+            }
+            or_val(J, v.reg, h);
+            return v;
+        }
+    }
     cval_t v = cache_find(J, a);
     if (v.kind == 1)
         pin(J, v.reg);
@@ -729,6 +762,44 @@ static void stub_store(jit_cpu_t *J, const pending_t *p, int keep) {
     }
 }
 
+/* r &= mask, through a scratch register when the mask is no sign-extended
+ * imm32 */
+static void and_imm64(jit_cpu_t *J, int r, uint64_t mask) {
+    if ((int64_t)mask == (int32_t)mask) {
+        rex(J, 1, 0, 0, r); e8(J, 0x81); modrm_reg(J, 4, r); e32(J, (uint32_t)mask);
+    } else if (mask == 0xffffffffULL) {
+        rex(J, 0, r, 0, r); e8(J, 0x89); modrm_reg(J, r, r);      /* mov r32, r32 */
+    } else {
+        int t = scratch(J);
+        mov_imm(J, t, mask);
+        and_rr(J, r, t);
+        unpin(J, t);
+    }
+}
+
+/* r |= v */
+static void or_val(jit_cpu_t *J, int r, cval_t v) {
+    if (v.kind == 2 && !v.val)
+        return;
+    int t = to_reg(J, v);
+    or_rr(J, r, t);
+    if (v.kind == 2)
+        unpin(J, t);
+}
+
+/* v shifted left (left = 1) or right by n bits, as a new value */
+static cval_t shifted(jit_cpu_t *J, cval_t v, int left, int n) {
+    if (v.kind == 2)
+        return (cval_t){ 2, -1, left ? v.val << n : v.val >> n };
+    int r = scratch(J);
+    mov_rr(J, r, v.reg);
+    if (left)
+        shl_ri(J, r, n);
+    else
+        shr_ri(J, r, n);
+    return (cval_t){ 1, r, 0 };
+}
+
 /* ------------------------------------------------------------------------ */
 /* translation */
 
@@ -753,6 +824,51 @@ static int hoisted(const jit_block_t *blk, uint64_t w) {
         if (blk->hoist[k] == w)
             return 1;
     return 0;
+}
+
+/* (w & keep) | part, as a new value */
+static cval_t masked_or(jit_cpu_t *J, cval_t w, uint64_t keep, cval_t part) {
+    if (w.kind == 2 && part.kind == 2)
+        return (cval_t){ 2, -1, (w.val & keep) | part.val };
+    int r = scratch(J);
+    if (w.kind == 2) {
+        mov_imm(J, r, w.val & keep);
+    } else {
+        mov_rr(J, r, w.reg);
+        and_imm64(J, r, keep);
+    }
+    or_val(J, r, part);
+    return (cval_t){ 1, r, 0 };
+}
+
+/* after v was stored to unaligned a, the cached words it spans, put together
+ * as the store left them; clobbers the flags */
+static void update_spanned(jit_cpu_t *J, uint64_t a, cval_t v) {
+    int k = (a & 7) * 8;
+    uint64_t lo = a & ~7ULL, hi = lo + 8;
+    for (int i = 0; i < NREGS; i++)
+        J->regs[i].pinned = 0;
+    if (v.kind == 1)
+        pin(J, v.reg);
+    cval_t lv = cache_find(J, lo), hv = cache_find(J, hi);
+    if (lv.kind == 1)
+        pin(J, lv.reg);
+    if (hv.kind == 1)
+        pin(J, hv.reg);
+    if (lv.kind) {
+        cval_t n = masked_or(J, lv, ~(~0ULL >> k), shifted(J, v, 0, k));
+        if (n.kind == 2)
+            set_const(J, lo, n.val);
+        else
+            bind(J, n.reg, lo);
+    }
+    if (hv.kind) {
+        cval_t n = masked_or(J, hv, ~0ULL >> k, shifted(J, v, 1, 64 - k));
+        if (n.kind == 2)
+            set_const(J, hi, n.val);
+        else
+            bind(J, n.reg, hi);
+    }
 }
 
 /* emit one instruction at p, the i-th of the block; returns whether it ended
@@ -934,7 +1050,9 @@ static int translate_insn(jit_cpu_t *J, jit_block_t *blk, uint64_t p, uint32_t i
         }
     }
 
-    /* what the store did to the cache */
+    /* what the store did to the cache; an unaligned one is put together
+     * after the branch, which needs the flags */
+    int spanned = 0;
     if (dynb) {
         if (!unchanged)
             cache_drop_all(J);
@@ -947,6 +1065,8 @@ static int translate_insn(jit_cpu_t *J, jit_block_t *blk, uint64_t p, uint32_t i
             J->pend = 1;
             J->pend_addr = fb;
         }
+    } else if ((fb & 7) && cacheable(fb & ~7ULL) && cacheable((fb & ~7ULL) + 8) && !unchanged) {
+        spanned = 1;
     } else if (!unchanged) {
         cache_drop(J, fb & ~7ULL);
         cache_drop(J, (fb & ~7ULL) + 8);
@@ -968,6 +1088,8 @@ static int translate_insn(jit_cpu_t *J, jit_block_t *blk, uint64_t p, uint32_t i
             s->site = jcc32(J, CC_LE);
         }
     }
+    if (spanned && !ended)
+        update_spanned(J, fb, res);
     return ended;
 }
 
