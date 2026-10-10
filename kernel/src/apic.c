@@ -74,8 +74,8 @@ static void ioapic_redirect(uint8_t irq, uint32_t gsi, uint16_t flags, uint8_t a
 }
 
 static void lapic_set_nmi(uint8_t vec, uint16_t flags, uint8_t lint) {
-    /* set as NMI and set the desired interrupt vector from the IDT */
-    uint32_t nmi = 800 | vec;
+    /* set as NMI (delivery mode 0b100 in bits 8-10) and set the desired interrupt vector from the IDT */
+    uint32_t nmi = 0x400 | vec;
     /* active low */
     if (flags & 2) {
         nmi |= 1 << 13;
