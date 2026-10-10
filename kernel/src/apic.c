@@ -42,14 +42,19 @@ static uint32_t get_max_redir(size_t ioapic_num) {
 
 static size_t get_ioapic_from_gsi(uint32_t gsi) {
     for (size_t i = 0; i < io_apic_ptr; i++) {
-        if (io_apics[i]->gsib <= gsi && io_apics[i]->gsib + get_max_redir(i) > gsi)
+        /* the maximum redirection entry is the index of the last pin, not the pin count */
+        if (io_apics[i]->gsib <= gsi && io_apics[i]->gsib + get_max_redir(i) >= gsi)
             return i;
     }
-    return -1;
+    return (size_t)-1;
 }
 
 static void ioapic_redirect(uint8_t irq, uint32_t gsi, uint16_t flags, uint8_t apic) {
     size_t ioapic = get_ioapic_from_gsi(gsi);
+    if (ioapic == (size_t)-1) {
+        kprint(KPRN_WARN, "APIC: No I/O APIC handles GSI %u, IRQ %u left unrouted", gsi, (uint32_t)irq);
+        return;
+    }
 
     /* offset the interrupt vector to start directly after exception handlers */
     uint64_t redirection = irq + 32;
