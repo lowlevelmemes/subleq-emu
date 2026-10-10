@@ -18,9 +18,11 @@
  * against a byte per page first. A hit drops the code translated from the
  * word, which turns dynamic.
  *
- * Within a block, values are cached in registers in native byte order. Every
- * store still goes to memory, so memory is current at the block boundaries
- * and for the accesses to computed addresses. Device registers and CPU banks
+ * Within a block, values are cached in registers in native byte order, and
+ * a word can also stand for a register's value or its negation, which the
+ * MOV idiom (clear Z, Z -= a, clear b, b -= Z) mostly turns into nothing.
+ * Every store still goes to memory, so memory is current at the block
+ * boundaries and for the accesses to computed addresses. Device registers and CPU banks
  * are never cached, so that they are read and written as the interpreter
  * would.
  *
@@ -65,6 +67,7 @@
 
 #define NREGS 11
 #define NCONST 16
+#define NALIAS 16
 
 int jit_enabled = 0;
 
@@ -97,7 +100,8 @@ typedef struct {
 } creg_t;
 
 typedef struct {
-    int kind;                       /* 0 none, 1 register, 2 constant */
+    int kind;                       /* 0 none, 1 register, 2 constant, 3 the
+                                     * register's negation */
     int reg;
     uint64_t val;
 } cval_t;
@@ -108,9 +112,17 @@ typedef struct {
     uint64_t val;
 } cconst_t;
 
+/* the value at addr is that of reg, or its negation */
+typedef struct {
+    int used;
+    uint64_t addr;
+    int reg;
+    int neg;
+} calias_t;
+
 /* a store held back, as it stood where a stub leaves */
 typedef struct {
-    int kind;                       /* 0 none, 1 register, 2 constant */
+    int kind;                       /* as in cval_t, 0 for none */
     int reg;
     uint64_t val;
     uint64_t addr;
@@ -181,10 +193,14 @@ typedef struct {
      * program order, minus those overwritten before any other */
     int pend;
     uint64_t pend_addr;
+    /* between the subtraction and the branch on its flags */
+    int flags_live;
     creg_t regs[NREGS];
     uint32_t lru_clock;
     cconst_t consts[NCONST];
     uint32_t const_next;
+    calias_t aliases[NALIAS];
+    uint32_t alias_next;
     stub_t stubs[JIT_MAX_BLOCK + 2];
     smc_t smcs[JIT_MAX_BLOCK * 4];
     uint64_t hoist[JIT_MAX_BLOCK * 2];
@@ -540,6 +556,9 @@ static void cache_drop(jit_cpu_t *J, uint64_t a) {
     for (int i = 0; i < NCONST; i++)
         if (J->consts[i].used && J->consts[i].addr == a)
             J->consts[i].used = 0;
+    for (int i = 0; i < NALIAS; i++)
+        if (J->aliases[i].used && J->aliases[i].addr == a)
+            J->aliases[i].used = 0;
 }
 
 static void cache_drop_all(jit_cpu_t *J) {
@@ -547,6 +566,8 @@ static void cache_drop_all(jit_cpu_t *J) {
         J->regs[i].used = 0;
     for (int i = 0; i < NCONST; i++)
         J->consts[i].used = 0;
+    for (int i = 0; i < NALIAS; i++)
+        J->aliases[i].used = 0;
 }
 
 static cval_t cache_find(jit_cpu_t *J, uint64_t a) {
@@ -566,7 +587,22 @@ static cval_t cache_find(jit_cpu_t *J, uint64_t a) {
             v.reg = alloc_regs[i];
             return v;
         }
+    for (int i = 0; i < NALIAS; i++)
+        if (J->aliases[i].used && J->aliases[i].addr == a) {
+            v.kind = J->aliases[i].neg ? 3 : 1;
+            v.reg = J->aliases[i].reg;
+            J->regs[reg_index(v.reg)].lru = ++J->lru_clock;
+            return v;
+        }
     return v;
+}
+
+/* whether a word stands for register r's value or negation */
+static int aliased(jit_cpu_t *J, int r) {
+    for (int i = 0; i < NALIAS; i++)
+        if (J->aliases[i].used && J->aliases[i].reg == r)
+            return 1;
+    return 0;
 }
 
 static void set_const(jit_cpu_t *J, uint64_t a, uint64_t val) {
@@ -581,6 +617,25 @@ static void set_const(jit_cpu_t *J, uint64_t a, uint64_t val) {
     J->consts[J->const_next++ % NCONST] = (cconst_t){ 1, a, val };
 }
 
+static void flush_pending(jit_cpu_t *J);
+
+/* make the value at a that of register r, or its negation */
+static void set_alias(jit_cpu_t *J, uint64_t a, int r, int neg) {
+    cache_drop(J, a);
+    if (!cacheable(a))
+        return;
+    for (int i = 0; i < NALIAS; i++)
+        if (!J->aliases[i].used) {
+            J->aliases[i] = (calias_t){ 1, a, r, neg };
+            return;
+        }
+    /* full: forget one, after storing it if held back */
+    int i = J->alias_next++ % NALIAS;
+    if (J->pend && J->pend_addr == J->aliases[i].addr)
+        flush_pending(J);
+    J->aliases[i] = (calias_t){ 1, a, r, neg };
+}
+
 static void pin(jit_cpu_t *J, int r) {
     int i = reg_index(r);
     if (i >= 0)
@@ -593,7 +648,19 @@ static void unpin(jit_cpu_t *J, int r) {
         J->regs[i].pinned = 0;
 }
 
-static void flush_pending(jit_cpu_t *J);
+/* before register r's value goes or changes: store what is held back
+ * through it, then forget the words that stood for it */
+static void release(jit_cpu_t *J, int r) {
+    if (J->pend) {
+        cval_t v = cache_find(J, J->pend_addr);
+        if ((v.kind == 1 || v.kind == 3) && v.reg == r)
+            flush_pending(J);
+    }
+    J->regs[reg_index(r)].used = 0;
+    for (int i = 0; i < NALIAS; i++)
+        if (J->aliases[i].used && J->aliases[i].reg == r)
+            J->aliases[i].used = 0;
+}
 
 /* a free register, pinned, taking the least recently used unpinned one; an
  * instruction pins at most 8 of the 11 */
@@ -602,17 +669,15 @@ static int scratch(jit_cpu_t *J) {
     for (int i = 0; i < NREGS; i++) {
         if (J->regs[i].pinned)
             continue;
-        if (!J->regs[i].used) {
+        if (!J->regs[i].used && !aliased(J, alloc_regs[i])) {
             best = i;
             break;
         }
         if (best < 0 || J->regs[i].lru < J->regs[best].lru)
             best = i;
     }
-    if (J->regs[best].used && J->pend && J->regs[best].addr == J->pend_addr)
-        flush_pending(J);
-    J->regs[best].used = 0;
     J->regs[best].pinned = 1;
+    release(J, alloc_regs[best]);
     return alloc_regs[best];
 }
 
@@ -660,9 +725,9 @@ static cval_t get_static(jit_cpu_t *J, uint64_t a) {
         int k = (a & 7) * 8;
         cval_t lo = cache_find(J, a & ~7ULL), hi = cache_find(J, (a & ~7ULL) + 8);
         if (lo.kind || hi.kind) {
-            if (lo.kind == 1)
+            if (lo.kind & 1)
                 pin(J, lo.reg);
-            if (hi.kind == 1)
+            if (hi.kind & 1)
                 pin(J, hi.reg);
             if (!lo.kind)
                 lo = get_static(J, a & ~7ULL);
@@ -682,7 +747,7 @@ static cval_t get_static(jit_cpu_t *J, uint64_t a) {
         }
     }
     cval_t v = cache_find(J, a);
-    if (v.kind == 1)
+    if (v.kind & 1)
         pin(J, v.reg);
     if (v.kind)
         return v;
@@ -697,11 +762,29 @@ static cval_t get_static(jit_cpu_t *J, uint64_t a) {
     return v;
 }
 
+/* r = -r, leaving the flags alone if a branch still needs them */
+static void negate(jit_cpu_t *J, int r) {
+    if (!J->flags_live) {
+        neg_r(J, r);
+        return;
+    }
+    rex(J, 1, 0, 0, r); e8(J, 0xf7); modrm_reg(J, 2, r);       /* not r */
+    op_mem(J, 0x8d, r, r, 1);                                  /* lea r, [r + 1] */
+}
+
+/* a register with v, which for a negation or a constant is a new one */
 static int to_reg(jit_cpu_t *J, cval_t v) {
     if (v.kind == 1)
         return v.reg;
+    if (v.kind == 3)
+        pin(J, v.reg);
     int r = scratch(J);
-    mov_imm(J, r, v.val);
+    if (v.kind == 3) {
+        mov_rr(J, r, v.reg);
+        negate(J, r);
+    } else {
+        mov_imm(J, r, v.val);
+    }
     return r;
 }
 
@@ -757,7 +840,10 @@ static void flush_pending(jit_cpu_t *J) {
     } else {
         int i = reg_index(v.reg), was = J->regs[i].pinned;
         J->regs[i].pinned = 1;
-        store_reg(J, v.reg, 0, J->pend_addr, -1);
+        int r = to_reg(J, v);
+        store_reg(J, r, 0, J->pend_addr, -1);
+        if (r != v.reg)
+            unpin(J, r);
         J->regs[i].pinned = was;
     }
 }
@@ -793,12 +879,18 @@ static void stub_store(jit_cpu_t *J, const pending_t *p, int keep) {
     if (p->kind == 2) {
         mov_imm(J, t, __builtin_bswap64(p->val));
         op_mem(J, 0x89, t, base, disp);
-    } else if (use_movbe) {
+    } else if (p->kind == 1 && use_movbe) {
         movbe_mem(J, 1, p->reg, base, disp);
     } else {
         mov_rr(J, t, p->reg);
-        bswap(J, t);
-        op_mem(J, 0x89, t, base, disp);
+        if (p->kind == 3)
+            neg_r(J, t);
+        if (use_movbe) {
+            movbe_mem(J, 1, t, base, disp);
+        } else {
+            bswap(J, t);
+            op_mem(J, 0x89, t, base, disp);
+        }
     }
 }
 
@@ -823,7 +915,7 @@ static void or_val(jit_cpu_t *J, int r, cval_t v) {
         return;
     int t = to_reg(J, v);
     or_rr(J, r, t);
-    if (v.kind == 2)
+    if (v.kind != 1)
         unpin(J, t);
 }
 
@@ -831,6 +923,8 @@ static void or_val(jit_cpu_t *J, int r, cval_t v) {
 static cval_t shifted(jit_cpu_t *J, cval_t v, int left, int n) {
     if (v.kind == 2)
         return (cval_t){ 2, -1, left ? v.val << n : v.val >> n };
+    if (v.kind == 3)
+        v = (cval_t){ 1, to_reg(J, v), 0 };
     int r = scratch(J);
     mov_rr(J, r, v.reg);
     if (left)
@@ -1023,6 +1117,8 @@ static cval_t masked_or(jit_cpu_t *J, cval_t w, uint64_t keep, cval_t part) {
         return (cval_t){ 2, -1, (w.val & keep) | part.val };
     if (w.kind == 2 && !(w.val & keep))
         return part;
+    if (w.kind == 3)
+        w = (cval_t){ 1, to_reg(J, w), 0 };
     int r = scratch(J);
     if (w.kind == 2) {
         mov_imm(J, r, w.val & keep);
@@ -1041,12 +1137,12 @@ static void update_spanned(jit_cpu_t *J, uint64_t a, cval_t v) {
     uint64_t lo = a & ~7ULL, hi = lo + 8;
     for (int i = 0; i < NREGS; i++)
         J->regs[i].pinned = 0;
-    if (v.kind == 1)
+    if (v.kind & 1)
         pin(J, v.reg);
     cval_t lv = cache_find(J, lo), hv = cache_find(J, hi);
-    if (lv.kind == 1)
+    if (lv.kind & 1)
         pin(J, lv.reg);
-    if (hv.kind == 1)
+    if (hv.kind & 1)
         pin(J, hv.reg);
     if (lv.kind) {
         cval_t n = masked_or(J, lv, ~(~0ULL >> k), shifted(J, v, 0, k));
@@ -1095,17 +1191,17 @@ static int translate_insn(jit_cpu_t *J, jit_block_t *blk, uint64_t p, uint32_t i
     if (dyna) {
         fav = cache_find(J, p);
         if (fav.kind == 2) { dyna = 0; fa = fav.val; }
-        else if (fav.kind == 1) pin(J, fav.reg);
+        else if (fav.kind) pin(J, fav.reg);
     }
     if (dynb) {
         fbv = cache_find(J, p + 8);
         if (fbv.kind == 2) { dynb = 0; fb = fbv.val; }
-        else if (fbv.kind == 1) pin(J, fbv.reg);
+        else if (fbv.kind) pin(J, fbv.reg);
     }
     if (dync) {
         fcv = cache_find(J, p + 16);
         if (fcv.kind == 2) { dync = 0; fc = fcv.val; }
-        else if (fcv.kind == 1) pin(J, fcv.reg);
+        else if (fcv.kind) pin(J, fcv.reg);
     }
 
     /* check the store target against translated code, leaving with the
@@ -1123,8 +1219,8 @@ static int translate_insn(jit_cpu_t *J, jit_block_t *blk, uint64_t p, uint32_t i
             J->smcs[(*nsmc)++].site = jcc32(J, CC_NZ);
         }
     } else {
-        if (fbv.kind == 1) {
-            rb = fbv.reg;
+        if (fbv.kind) {
+            rb = to_reg(J, fbv);
         } else {
             rb = scratch(J);
             load_static(J, rb, p + 8);
@@ -1156,8 +1252,8 @@ static int translate_insn(jit_cpu_t *J, jit_block_t *blk, uint64_t p, uint32_t i
             va = get_static(J, fa);
         } else {
             int ra;
-            if (fav.kind == 1) {
-                ra = fav.reg;
+            if (fav.kind) {
+                ra = to_reg(J, fav);
             } else {
                 ra = scratch(J);
                 load_static(J, ra, p);
@@ -1181,15 +1277,21 @@ static int translate_insn(jit_cpu_t *J, jit_block_t *blk, uint64_t p, uint32_t i
     /* a dynamic C is read before the store, as the instruction would */
     int rc = -1;
     if (dync) {
-        if (fcv.kind == 1) {
-            rc = fcv.reg;
+        if (fcv.kind) {
+            rc = to_reg(J, fcv);
         } else {
             rc = scratch(J);
             load_static(J, rc, p + 16);
         }
     }
 
-    /* the result, and the branch: known (taken 0 or 1) or in the flags */
+    /* the result, and the branch: known (taken 0 or 1) or in the flags, which
+     * come from the same subtraction where there is a branch, as computing
+     * B + R for B - -R would set them otherwise for R = INT64_MIN */
+    int branch = dync || fc != p + 24;
+    int pendable = !dynb && cacheable(fb);
+    if (!same && !(va.kind == 2 && va.val == 0 && vb.kind != 2) && (!pendable || J->pend_addr != fb))
+        flush_pending(J);
     cval_t res;
     int taken = -1;
     int unchanged = 0;
@@ -1201,19 +1303,46 @@ static int translate_insn(jit_cpu_t *J, jit_block_t *blk, uint64_t p, uint32_t i
         taken = (int64_t)vb.val <= (int64_t)va.val;
     } else if (va.kind == 2 && va.val == 0) {
         res = vb;
-        test_rr(J, res.reg, res.reg);
         unchanged = 1;
+        if (branch) {
+            int t = to_reg(J, vb);
+            test_rr(J, t, t);
+        }
+    } else if (vb.kind == 2 && vb.val == 0 && !branch && (va.kind & 1)) {
+        /* 0 - A: A's register, negated or no longer */
+        res = (cval_t){ va.kind == 1 ? 3 : 1, va.reg, 0 };
+    } else if (va.kind == 3 && vb.kind != 3 && !branch) {
+        /* B - -R = B + R */
+        int ib = vb.kind == 1 ? reg_index(vb.reg) : -1;
+        int rr;
+        if (ib >= 0 && !aliased(J, vb.reg) && (!J->regs[ib].used || J->regs[ib].addr == fb) && !dynb) {
+            rr = vb.reg;
+        } else {
+            rr = scratch(J);
+            if (vb.kind == 2)
+                mov_imm(J, rr, vb.val);
+            else
+                mov_rr(J, rr, vb.reg);
+        }
+        rex(J, 1, va.reg, 0, rr); e8(J, 0x01); modrm_reg(J, va.reg, rr);    /* add rr, R */
+        res = (cval_t){ 1, rr, 0 };
+        pin(J, rr);
     } else {
         int rr;
         if (vb.kind == 2 && vb.val == 0) {
-            rr = scratch(J);
-            mov_rr(J, rr, va.reg);
+            rr = to_reg(J, va);
+            if (rr == va.reg) {
+                rr = scratch(J);
+                mov_rr(J, rr, va.reg);
+            }
             neg_r(J, rr);
         } else {
             int ib = vb.kind == 1 ? reg_index(vb.reg) : -1;
             /* compute in B's register if it holds nothing but B */
-            if (ib >= 0 && (!J->regs[ib].used || (!dynb && J->regs[ib].addr == fb))) {
+            if (ib >= 0 && !aliased(J, vb.reg) && (!J->regs[ib].used || (!dynb && J->regs[ib].addr == fb))) {
                 rr = vb.reg;
+            } else if (vb.kind == 3) {
+                rr = to_reg(J, vb);
             } else {
                 rr = scratch(J);
                 if (vb.kind == 2)
@@ -1227,16 +1356,19 @@ static int translate_insn(jit_cpu_t *J, jit_block_t *blk, uint64_t p, uint32_t i
         pin(J, rr);
     }
 
+    J->flags_live = branch && taken < 0;
+
     /* store: to a static word it is held back, otherwise any held back
      * store goes first; subtracting 0 leaves memory as it is */
-    int pendable = !dynb && cacheable(fb);
     if (!unchanged) {
         if (!pendable) {
             flush_pending(J);
-            if (res.kind == 2)
+            if (res.kind == 2) {
                 store_const(J, res.val, dynb, fb, rb);
-            else
+            } else {
+                res = (cval_t){ 1, to_reg(J, res), 0 };
                 store_reg(J, res.reg, dynb, fb, rb);
+            }
         } else if (J->pend && J->pend_addr != fb) {
             flush_pending(J);
         }
@@ -1249,10 +1381,17 @@ static int translate_insn(jit_cpu_t *J, jit_block_t *blk, uint64_t p, uint32_t i
         if (!unchanged)
             cache_drop_all(J);
     } else if (pendable) {
-        if (res.kind == 2)
+        if (res.kind == 2) {
             set_const(J, fb, res.val);
-        else
-            bind(J, res.reg, fb);
+        } else if (res.kind == 3) {
+            set_alias(J, fb, res.reg, 1);
+        } else {
+            int i = reg_index(res.reg);
+            if (J->regs[i].used && J->regs[i].addr != fb)
+                set_alias(J, fb, res.reg, 0);
+            else
+                bind(J, res.reg, fb);
+        }
         if (!unchanged) {
             J->pend = 1;
             J->pend_addr = fb;
@@ -1266,6 +1405,7 @@ static int translate_insn(jit_cpu_t *J, jit_block_t *blk, uint64_t p, uint32_t i
 
     /* branch */
     int ended = 0;
+    J->flags_live = 0;
     if (taken != 0 && (dync || fc != p + 24)) {
         stub_t *s = &J->stubs[(*nstubs)++];
         s->dyn = dync;
@@ -1415,6 +1555,8 @@ static jit_block_t *translate(jit_cpu_t *J, uint64_t start) {
         J->regs[k] = (creg_t){ 0 };
     for (int k = 0; k < NCONST; k++)
         J->consts[k].used = 0;
+    for (int k = 0; k < NALIAS; k++)
+        J->aliases[k].used = 0;
     J->pend = 0;
 
     uint32_t i;
