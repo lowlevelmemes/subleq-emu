@@ -1030,6 +1030,9 @@ static jit_block_t *translate(jit_cpu_t *J, uint64_t start) {
     }
 
     J->stats.code_bytes += J->cp - J->code_ptr;
+#ifdef JIT_HOSTED
+    jit_os_translated(start, n, J->code_ptr, J->cp - J->code_ptr);
+#endif
     J->code_ptr = J->cp;
 
     uint64_t h = hash(start);

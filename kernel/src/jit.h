@@ -54,6 +54,8 @@ jit_stats_t *jit_get_stats(int cpu);
 #ifdef JIT_HOSTED
 /* Provided by the host: zeroed, page aligned, and executable memory */
 void *jit_os_alloc(size_t bytes);
+/* Called with each block translated */
+void jit_os_translated(uint64_t start, uint32_t n, const uint8_t *code, size_t bytes);
 #endif
 
 #endif
