@@ -39,6 +39,10 @@ size_t jit_init(uint64_t mem_size, int ncpus, size_t max_bytes, int movbe);
 /* Shrink the Dawn memory size given to jit_init() to the final one */
 void jit_set_mem_size(uint64_t mem_size);
 
+/* Copy with copy in the word copy loop, rather than memmove; the copies
+ * only go down over their source, if at all */
+void jit_set_copy(void (*copy)(void *, const void *, size_t));
+
 /* Make CPU cpu leave its code, at the next block, once the big-endian word at
  * addr no longer holds value */
 void jit_set_watch(int cpu, uint64_t addr, uint64_t value);

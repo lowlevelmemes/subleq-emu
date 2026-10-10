@@ -42,13 +42,14 @@ int dawn_ready = 0;
 /* CPU feature flags (written by detect_cpu_features) */
 uint64_t has_movbe = 0;
 uint64_t has_monitor = 0;
+uint64_t has_avx = 0;
 uint64_t has_avx2 = 0;
 uint64_t has_avx512 = 0;
 
 /* The redraw runs in interrupts and uses SIMD registers, so it saves those of
- * whatever it interrupts: with XSAVE if it is enabled and its area for what
- * is enabled fits, else with FXSAVE, which only covers the XMM registers the
- * SSE2 redraw uses */
+ * whatever it interrupts, which can be copying with them (jit_copy()): with
+ * XSAVE if it is enabled and its area for what is enabled fits, else with
+ * FXSAVE, which only covers the XMM registers the SSE2 redraw uses */
 static uint8_t simd_area[4096] __attribute__((aligned(64)));
 static int use_xsave = 0;
 
@@ -65,6 +66,11 @@ static void simd_restore(void) {
     else
         asm volatile ("fxrstor64 %0" :: "m" (simd_area));
 }
+
+/* Copies for the translator's word copy loop (copy.asm) */
+extern void copy_sse2(void *d, const void *s, size_t n);
+extern void copy_avx(void *d, const void *s, size_t n);
+extern void copy_avx512(void *d, const void *s, size_t n);
 
 /* Assembly functions for SIMD screen redraw */
 extern void screen_redraw_sse2(volatile uint32_t *dst, uint32_t *src,
@@ -367,6 +373,7 @@ static void detect_cpu_features(void) {
         has_avx2 = 0;
         return;
     }
+    has_avx = 1;
 
     /* The size of the XSAVE area for the state enabled in XCR0 */
     uint32_t a = 0xd, b, c = 0, d;
@@ -401,6 +408,40 @@ static void detect_cpu_features(void) {
     has_avx512 = 1;
 }
 
+static uint8_t copy_bench[2][16384] __attribute__((aligned(64)));
+
+/* the best of a few runs at copying copy_bench, in TSC ticks */
+static uint64_t time_copy(void (*copy)(void *, const void *, size_t)) {
+    uint64_t best = ~0ULL;
+    for (int r = 0; r < 8; r++) {
+        uint64_t t = rdtsc();
+        for (int k = 0; k < 8; k++)
+            copy(copy_bench[0] + 8 * (k & 1), copy_bench[1], sizeof copy_bench[1] - 8);
+        t = rdtsc() - t;
+        if (t < best)
+            best = t;
+    }
+    return best;
+}
+
+/* Give the translator's word copy loop the fastest copy here, though AVX-512
+ * has to be faster by a tenth, as it slows the clock down on some CPUs */
+static void pick_copy(void) {
+    static const char *names[] = { "SSE2", "AVX", "AVX-512" };
+    void (*copies[])(void *, const void *, size_t) = { copy_sse2, copy_avx, copy_avx512 };
+    int n = has_avx512 ? 3 : has_avx ? 2 : 1;
+    uint64_t t[3] = { 0 };
+    int best = 0;
+    for (int k = 0; k < n; k++) {
+        t[k] = time_copy(copies[k]);
+        if (k < 2 ? t[k] < t[best] : t[k] * 10 < t[best] * 9)
+            best = k;
+    }
+    jit_set_copy(copies[best]);
+    kprint(KPRN_INFO, "dawn: Copying with %s (TSC ticks: SSE2 %U, AVX %U, AVX-512 %U).",
+           names[best], t[0], t[1], t[2]);
+}
+
 void dawn_init(void) {
     /* Validate framebuffer request */
     if (framebuffer_request.response == NULL ||
@@ -431,6 +472,7 @@ void dawn_init(void) {
     antibuffer1 = kalloc((vbe_pitch / sizeof(uint32_t)) * vbe_height * sizeof(uint32_t));
 
     detect_cpu_features();
+    pick_copy();
     dawn_build_pagemap(ramdisk_loc);
 
     asm volatile (

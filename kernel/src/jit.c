@@ -925,6 +925,13 @@ typedef struct {
 /* below this many iterations, the call costs more than it saves */
 #define COPY_MIN 4
 
+/* the copy jit_copy() does, which only ever goes down over its source */
+static void move(void *d, const void *s, size_t n) {
+    __builtin_memmove(d, s, n);
+}
+
+static void (*copy_fn)(void *, const void *, size_t) = move;
+
 static inline int overlaps(uint64_t a, uint64_t alen, uint64_t b, uint64_t blen) {
     return a < b + blen && b < a + alen;
 }
@@ -965,7 +972,7 @@ copy_result_t jit_copy(const uint64_t *desc, uint64_t budget) {
             return r;
 
     uint64_t last = rd(s + bytes - 8);
-    __builtin_memmove((void *)d, (void *)s, bytes);
+    copy_fn((void *)d, (void *)s, bytes);
     /* the variables and fields as the last iteration leaves them */
     uint64_t dl = d + bytes - 8;
     wr(sv, s + bytes);
@@ -1578,6 +1585,10 @@ size_t jit_init(uint64_t msize, int n, size_t max_bytes, int movbe) {
     }
     jit_enabled = 1;
     return total;
+}
+
+void jit_set_copy(void (*copy)(void *, const void *, size_t)) {
+    copy_fn = copy;
 }
 
 void jit_set_watch(int cpu, uint64_t addr, uint64_t value) {

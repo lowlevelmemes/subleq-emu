@@ -64,6 +64,12 @@ static inline void wrmsr(uint32_t msr, uint64_t value) {
     asm volatile ("wrmsr" :: "c"(msr), "a"((uint32_t)value), "d"((uint32_t)(value >> 32)));
 }
 
+static inline uint64_t rdtsc(void) {
+    uint32_t lo, hi;
+    asm volatile ("rdtsc" : "=a"(lo), "=d"(hi));
+    return ((uint64_t)hi << 32) | lo;
+}
+
 /* CPU initialization */
 void enable_simd(void);
 
