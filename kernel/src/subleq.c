@@ -26,6 +26,11 @@ static void report(void) {
                s->interp_steps, s->flushes, s->links, s->entries);
         last[c] = s->executed;
     }
+    uint64_t starts[12];
+    uint32_t counts[12], total;
+    int n = jit_top_samples(0, 12, starts, counts, &total);
+    for (int k = 0; k < n; k++)
+        kprint(KPRN_DBG, "cpu 0 hot: %X %U percent", starts[k], (uint64_t)counts[k] * 100 / (total ? total : 1));
 }
 #endif
 

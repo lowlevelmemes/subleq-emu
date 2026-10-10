@@ -51,6 +51,11 @@ extern int jit_enabled;
 
 jit_stats_t *jit_get_stats(int cpu);
 
+/* Count rip, interrupted on CPU cpu, against the block it is in, and list the
+ * blocks most counted since the last call in starts and counts, by count */
+void jit_sample(int cpu, uint64_t rip);
+int jit_top_samples(int cpu, int max, uint64_t *starts, uint32_t *counts, uint32_t *total);
+
 #ifdef JIT_HOSTED
 /* Provided by the host: zeroed, page aligned, and executable memory */
 void *jit_os_alloc(size_t bytes);

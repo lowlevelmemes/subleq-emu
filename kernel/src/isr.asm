@@ -228,6 +228,7 @@ handler_wakeup:
 
 irq0_handler:
         pusham
+        mov rdi, [rsp + 15 * 8]     ; interrupted rip
         call timer_interrupt
         call eoi
 

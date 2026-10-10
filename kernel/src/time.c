@@ -4,11 +4,18 @@
 #include <mouse.h>
 #include <smp.h>
 #include <dawn.h>
+#include <jit.h>
 
 volatile uint64_t uptime_raw = 0;
 
-void timer_interrupt(void) {
+void timer_interrupt(uint64_t rip) {
     uptime_raw++;
+
+#ifdef JIT_DEBUG
+    jit_sample(0, rip);
+#else
+    (void)rip;
+#endif
 
     if (dawn_ready) {
         /* raise vector 0x80 on the last AP, which flushes I/O, updates the

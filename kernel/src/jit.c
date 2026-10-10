@@ -82,6 +82,7 @@ typedef struct jit_block {
     uint64_t smask[3];              /* which fields are static */
     uint64_t shash;                 /* and a hash of their values */
     int valid;
+    uint32_t samples;
 } jit_block_t;
 
 typedef struct {
@@ -188,6 +189,7 @@ typedef struct {
     uint8_t written[JIT_MAX_BLOCK * 3];
 
     jit_stats_t stats;
+    uint32_t samples, samples_out;
 } jit_cpu_t;
 
 static uint64_t mem_size;
@@ -1406,6 +1408,54 @@ void jit_set_mem_size(uint64_t msize) {
 
 jit_stats_t *jit_get_stats(int cpu) {
     return &cpus[cpu]->stats;
+}
+
+void jit_sample(int cpu, uint64_t rip) {
+    if (!jit_enabled || cpu >= ncpus)
+        return;
+    jit_cpu_t *J = cpus[cpu];
+    uint8_t *p = (uint8_t *)rip;
+    if (p < J->code_base || p >= J->code_ptr) {
+        J->samples_out++;
+        return;
+    }
+    /* blocks lie in the code cache in the order they were made */
+    uint32_t lo = 0, hi = J->nblocks;
+    while (hi - lo > 1) {
+        uint32_t mid = (lo + hi) / 2;
+        if (J->blocks[mid].entry <= p)
+            lo = mid;
+        else
+            hi = mid;
+    }
+    if (J->nblocks) {
+        J->blocks[lo].samples++;
+        J->samples++;
+    }
+}
+
+int jit_top_samples(int cpu, int max, uint64_t *starts, uint32_t *counts, uint32_t *total) {
+    jit_cpu_t *J = cpus[cpu];
+    int n = 0;
+    for (uint32_t b = 0; b < J->nblocks; b++) {
+        uint32_t c = J->blocks[b].samples;
+        if (!c)
+            continue;
+        J->blocks[b].samples = 0;
+        int k = n < max ? n++ : max - 1;
+        if (k == max - 1 && n == max && counts[k] >= c)
+            continue;
+        while (k > 0 && counts[k - 1] < c) {
+            starts[k] = starts[k - 1];
+            counts[k] = counts[k - 1];
+            k--;
+        }
+        starts[k] = J->blocks[b].start;
+        counts[k] = c;
+    }
+    *total = J->samples + J->samples_out;
+    J->samples = J->samples_out = 0;
+    return n;
 }
 
 static void link_to(jit_cpu_t *J, uint8_t *site, jit_block_t *t) {

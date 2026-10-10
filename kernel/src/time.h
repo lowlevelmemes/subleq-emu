@@ -8,7 +8,7 @@
 
 extern volatile uint64_t uptime_raw;
 
-void timer_interrupt(void);
+void timer_interrupt(uint64_t rip);
 void timer_interrupt_ap(void);
 
 #endif
