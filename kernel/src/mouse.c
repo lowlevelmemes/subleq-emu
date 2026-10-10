@@ -171,15 +171,14 @@ static dmouse_packet_t process_packet(mouse_packet_t *p) {
         dp.mouse_click_m = 0;
     }
 
+    /* movements are 9-bit two's complement, with the sign bits in the flags */
+    x_mov = p->x_mov;
     if (p->flags & (1 << 4))
-        x_mov = (int8_t)p->x_mov;
-    else
-        x_mov = p->x_mov;
+        x_mov -= 256;
 
+    y_mov = p->y_mov;
     if (p->flags & (1 << 5))
-        y_mov = (int8_t)p->y_mov;
-    else
-        y_mov = p->y_mov;
+        y_mov -= 256;
 
     if (mouse_x + x_mov < 0) {
         mouse_x = 0;
