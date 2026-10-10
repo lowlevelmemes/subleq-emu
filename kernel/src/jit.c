@@ -102,17 +102,27 @@ typedef struct {
     uint64_t val;
 } cconst_t;
 
+/* a store held back, as it stood where a stub leaves */
+typedef struct {
+    int kind;                       /* 0 none, 1 register, 2 constant */
+    int reg;
+    uint64_t val;
+    uint64_t addr;
+} pending_t;
+
 typedef struct {
     int dyn;                        /* exit to C in register creg */
     uint8_t *site;                  /* rel32 jumping to the stub */
     uint64_t target;
     uint32_t idx;                   /* instruction the exit leaves from */
     int creg;
+    pending_t pend;
 } stub_t;
 
 typedef struct {
     uint8_t *site;
     uint32_t idx;                   /* instruction left before it ran */
+    pending_t pend;
 } smc_t;
 
 typedef struct {
@@ -155,6 +165,11 @@ typedef struct {
 
     /* translator */
     uint8_t *cp;
+    /* the last store to a static word, held back in case the next store goes
+     * to the same word and makes it dead: stores still reach memory in
+     * program order, minus those overwritten before any other */
+    int pend;
+    uint64_t pend_addr;
     creg_t regs[NREGS];
     uint32_t lru_clock;
     cconst_t consts[NCONST];
@@ -535,6 +550,8 @@ static void unpin(jit_cpu_t *J, int r) {
         J->regs[i].pinned = 0;
 }
 
+static void flush_pending(jit_cpu_t *J);
+
 /* a free register, pinned, taking the least recently used unpinned one; an
  * instruction pins at most 8 of the 11 */
 static int scratch(jit_cpu_t *J) {
@@ -549,6 +566,8 @@ static int scratch(jit_cpu_t *J) {
         if (best < 0 || J->regs[i].lru < J->regs[best].lru)
             best = i;
     }
+    if (J->regs[best].used && J->pend && J->regs[best].addr == J->pend_addr)
+        flush_pending(J);
     J->regs[best].used = 0;
     J->regs[best].pinned = 1;
     return alloc_regs[best];
@@ -594,6 +613,9 @@ static cval_t get_static(jit_cpu_t *J, uint64_t a) {
         pin(J, v.reg);
     if (v.kind)
         return v;
+    /* memory has to have a held back store the load covers */
+    if (J->pend && (a & 7) && (J->pend_addr == (a & ~7ULL) || J->pend_addr == (a & ~7ULL) + 8))
+        flush_pending(J);
     int r = scratch(J);
     load_static(J, r, a);
     bind(J, r, a);
@@ -649,6 +671,62 @@ static void store_const(jit_cpu_t *J, uint64_t v, int dyn, uint64_t a, int base)
         mov_imm(J, base, a);
     }
     op_mem(J, 0x89, t, base, 0);
+}
+
+/* store the held back value, and stop holding it */
+static void flush_pending(jit_cpu_t *J) {
+    if (!J->pend)
+        return;
+    J->pend = 0;
+    cval_t v = cache_find(J, J->pend_addr);
+    if (v.kind == 2) {
+        store_const(J, v.val, 0, J->pend_addr, -1);
+    } else {
+        int i = reg_index(v.reg), was = J->regs[i].pinned;
+        J->regs[i].pinned = 1;
+        store_reg(J, v.reg, 0, J->pend_addr, -1);
+        J->regs[i].pinned = was;
+    }
+}
+
+static pending_t snap_pending(jit_cpu_t *J) {
+    pending_t p = { 0, -1, 0, 0 };
+    if (J->pend) {
+        cval_t v = cache_find(J, J->pend_addr);
+        p.kind = v.kind;
+        p.reg = v.reg;
+        p.val = v.val;
+        p.addr = J->pend_addr;
+    }
+    return p;
+}
+
+/* store a held back value from a stub, where any register but the value's and
+ * keep can be clobbered */
+static void stub_store(jit_cpu_t *J, const pending_t *p, int keep) {
+    if (!p->kind)
+        return;
+    int t = RAX, base = R15;
+    while (t == p->reg || t == keep)
+        t++;
+    int32_t disp = (int32_t)(p->addr - BIAS);
+    if (!fits_disp(p->addr)) {
+        base = t + 1;
+        while (base == p->reg || base == keep)
+            base++;
+        mov_imm(J, base, p->addr);
+        disp = 0;
+    }
+    if (p->kind == 2) {
+        mov_imm(J, t, __builtin_bswap64(p->val));
+        op_mem(J, 0x89, t, base, disp);
+    } else if (use_movbe) {
+        movbe_mem(J, 1, p->reg, base, disp);
+    } else {
+        mov_rr(J, t, p->reg);
+        bswap(J, t);
+        op_mem(J, 0x89, t, base, disp);
+    }
 }
 
 /* ------------------------------------------------------------------------ */
@@ -731,6 +809,7 @@ static int translate_insn(jit_cpu_t *J, jit_block_t *blk, uint64_t p, uint32_t i
                 continue;
             test_bitmap(J, w);
             J->smcs[*nsmc].idx = i;
+            J->smcs[*nsmc].pend = snap_pending(J);
             J->smcs[(*nsmc)++].site = jcc32(J, CC_NZ);
         }
     } else {
@@ -754,6 +833,7 @@ static int translate_insn(jit_cpu_t *J, jit_block_t *blk, uint64_t p, uint32_t i
             load_sib8(J, t2, R14, t2);
             bt_rr(J, t2, t1);
             J->smcs[*nsmc].idx = i;
+            J->smcs[*nsmc].pend = snap_pending(J);
             J->smcs[(*nsmc)++].site = jcc32(J, CC_C);
         }
         unpin(J, t1);
@@ -775,6 +855,7 @@ static int translate_insn(jit_cpu_t *J, jit_block_t *blk, uint64_t p, uint32_t i
                 load_static(J, ra, p);
                 bind(J, ra, p);
             }
+            flush_pending(J);
             va.kind = 1;
             va.reg = scratch(J);
             load_mem(J, va.reg, ra, 0);
@@ -782,6 +863,7 @@ static int translate_insn(jit_cpu_t *J, jit_block_t *blk, uint64_t p, uint32_t i
         if (!dynb) {
             vb = get_static(J, fb);
         } else {
+            flush_pending(J);
             vb.kind = 1;
             vb.reg = scratch(J);
             load_mem(J, vb.reg, rb, 0);
@@ -837,38 +919,56 @@ static int translate_insn(jit_cpu_t *J, jit_block_t *blk, uint64_t p, uint32_t i
         pin(J, rr);
     }
 
-    /* store, unless subtracting 0 leaves memory as it is */
-    if (res.kind == 2)
-        store_const(J, res.val, dynb, fb, rb);
-    else if (!unchanged)
-        store_reg(J, res.reg, dynb, fb, rb);
+    /* store: to a static word it is held back, otherwise any held back
+     * store goes first; subtracting 0 leaves memory as it is */
+    int pendable = !dynb && cacheable(fb);
+    if (!unchanged) {
+        if (!pendable) {
+            flush_pending(J);
+            if (res.kind == 2)
+                store_const(J, res.val, dynb, fb, rb);
+            else
+                store_reg(J, res.reg, dynb, fb, rb);
+        } else if (J->pend && J->pend_addr != fb) {
+            flush_pending(J);
+        }
+    }
 
     /* what the store did to the cache */
     if (dynb) {
-        cache_drop_all(J);
-    } else if (!cacheable(fb)) {
+        if (!unchanged)
+            cache_drop_all(J);
+    } else if (pendable) {
+        if (res.kind == 2)
+            set_const(J, fb, res.val);
+        else
+            bind(J, res.reg, fb);
+        if (!unchanged) {
+            J->pend = 1;
+            J->pend_addr = fb;
+        }
+    } else if (!unchanged) {
         cache_drop(J, fb & ~7ULL);
         cache_drop(J, (fb & ~7ULL) + 8);
-    } else if (res.kind == 2) {
-        set_const(J, fb, res.val);
-    } else {
-        bind(J, res.reg, fb);
     }
 
     /* branch */
-    if (taken == 0 || (!dync && fc == p + 24))
-        return 0;
-    stub_t *s = &J->stubs[(*nstubs)++];
-    s->dyn = dync;
-    s->idx = i;
-    s->target = fc;
-    s->creg = rc;
-    if (taken == 1) {
-        s->site = jmp32(J);
-        return 1;
+    int ended = 0;
+    if (taken != 0 && (dync || fc != p + 24)) {
+        stub_t *s = &J->stubs[(*nstubs)++];
+        s->dyn = dync;
+        s->idx = i;
+        s->target = fc;
+        s->creg = rc;
+        s->pend = snap_pending(J);
+        if (taken == 1) {
+            s->site = jmp32(J);
+            ended = 1;
+        } else {
+            s->site = jcc32(J, CC_LE);
+        }
     }
-    s->site = jcc32(J, CC_LE);
-    return 0;
+    return ended;
 }
 
 static jit_block_t *translate(jit_cpu_t *J, uint64_t start) {
@@ -965,6 +1065,7 @@ static jit_block_t *translate(jit_cpu_t *J, uint64_t start) {
         J->regs[k] = (creg_t){ 0 };
     for (int k = 0; k < NCONST; k++)
         J->consts[k].used = 0;
+    J->pend = 0;
 
     int nstubs = 0, nsmc = 0, ended = 0;
     uint32_t i;
@@ -978,6 +1079,7 @@ static jit_block_t *translate(jit_cpu_t *J, uint64_t start) {
         s->dyn = 0;
         s->idx = n - 1;
         s->target = start + 24ULL * n;
+        s->pend = snap_pending(J);
         s->site = jmp32(J);
     }
 
@@ -1004,6 +1106,7 @@ static jit_block_t *translate(jit_cpu_t *J, uint64_t start) {
     /* a computed one did: instruction idx not run */
     for (int k = 0; k < nsmc; k++) {
         patch_rel32(J->smcs[k].site, J->cp);
+        stub_store(J, &J->smcs[k].pend, -1);
         alu_imm(J, 0, RBP, (int32_t)(n - J->smcs[k].idx));
         exit_to(J, start + 24ULL * J->smcs[k].idx, 1);
     }
@@ -1011,6 +1114,7 @@ static jit_block_t *translate(jit_cpu_t *J, uint64_t start) {
     for (int k = 0; k < nstubs; k++) {
         stub_t *s = &J->stubs[k];
         patch_rel32(s->site, J->cp);
+        stub_store(J, &s->pend, s->dyn ? s->creg : -1);
         uint32_t unexec = n - s->idx - 1;
         if (unexec)
             alu_imm(J, 0, RBP, (int32_t)unexec);
