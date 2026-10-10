@@ -194,6 +194,11 @@ typedef struct {
 
     jit_stats_t stats;
     uint32_t samples, samples_out;
+    /* samples outside translated code, by 64-byte line */
+    struct {
+        uint64_t line;
+        uint32_t count;
+    } out[64];
 } jit_cpu_t;
 
 static uint64_t mem_size;
@@ -1611,6 +1616,15 @@ void jit_sample(int cpu, uint64_t rip) {
     uint8_t *p = (uint8_t *)rip;
     if (p < J->code_base || p >= J->code_ptr) {
         J->samples_out++;
+        uint64_t line = rip & ~63ULL;
+        uint32_t h = (uint32_t)((line >> 6) * 0x9e3779b1U) >> 26;
+        for (int k = 0; k < 64; k++, h = (h + 1) & 63) {
+            if (J->out[h].line == line || !J->out[h].count) {
+                J->out[h].line = line;
+                J->out[h].count++;
+                break;
+            }
+        }
         return;
     }
     /* blocks lie in the code cache in the order they were made */
@@ -1631,6 +1645,23 @@ void jit_sample(int cpu, uint64_t rip) {
 int jit_top_samples(int cpu, int max, uint64_t *starts, uint32_t *counts, uint32_t *total) {
     jit_cpu_t *J = cpus[cpu];
     int n = 0;
+    /* lines outside translated code count as blocks starting there */
+    for (int k = 0; k < 64; k++) {
+        uint32_t c = J->out[k].count;
+        if (!c)
+            continue;
+        J->out[k].count = 0;
+        int i = n < max ? n++ : max - 1;
+        if (i == max - 1 && n == max && counts[i] >= c)
+            continue;
+        while (i > 0 && counts[i - 1] < c) {
+            starts[i] = starts[i - 1];
+            counts[i] = counts[i - 1];
+            i--;
+        }
+        starts[i] = J->out[k].line;
+        counts[i] = c;
+    }
     for (uint32_t b = 0; b < J->nblocks; b++) {
         uint32_t c = J->blocks[b].samples;
         if (!c)
