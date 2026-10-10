@@ -1021,6 +1021,8 @@ static int hoisted(const jit_block_t *blk, uint64_t w) {
 static cval_t masked_or(jit_cpu_t *J, cval_t w, uint64_t keep, cval_t part) {
     if (w.kind == 2 && part.kind == 2)
         return (cval_t){ 2, -1, (w.val & keep) | part.val };
+    if (w.kind == 2 && !(w.val & keep))
+        return part;
     int r = scratch(J);
     if (w.kind == 2) {
         mov_imm(J, r, w.val & keep);
