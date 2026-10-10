@@ -35,7 +35,7 @@ static volatile struct limine_date_at_boot_request date_request = {
 
 int dawn_ready = 0;
 
-/* CPU feature flags (written by detect_cpu_features, read by asm) */
+/* CPU feature flags (written by detect_cpu_features) */
 uint64_t has_movbe = 0;
 uint64_t has_avx2 = 0;
 uint64_t has_avx512 = 0;

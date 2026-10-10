@@ -1,14 +1,6 @@
 global screen_redraw_avx2
 global screen_redraw_avx512
 
-; CPU feature flags (defined in dawn.c)
-extern has_movbe
-extern has_avx2
-extern has_avx512
-
-; Dawn OS memory-mapped I/O locations
-%define DAWN_CPU_BANK_BASE  334364672   ; 0x13EE0000 - per-CPU status/EIP
-
 section .data
     align 64
 pixel_shuffle_mask:
@@ -22,289 +14,51 @@ pixel_shuffle_mask:
 
 section .text
 
-; NOTE: We use R12 as the SUBLEQ instruction pointer (not RSP)
-; This allows normal interrupt handling without needing IST
+bits 64
 
-; Legacy loop cycle (no MOVBE) - for older CPUs
-%macro loop_cycle 0
-    ; Load operands in parallel (vs sequential pops)
+; One instruction, with eip in r12, taking the branch when B <= A as signed
+; numbers
+%macro interp_cycle 0
     mov rsi, [r12]
     mov rbx, [r12+8]
     mov rdi, [r12+16]
     lea r12, [r12+24]
-
-    ; Convert addresses to little-endian
     bswap rsi
     bswap rbx
-
-    ; Load values
     mov rax, [rsi]
     mov rdx, [rbx]
-
-    ; Convert to little-endian, compute, convert back
     bswap rax
     bswap rdx
     sub rdx, rax
     bswap rdx
     mov [rbx], rdx
-
-    ; Branch if result <= 0
     jg %%no_branch
     bswap rdi
     mov r12, rdi
 %%no_branch:
 %endmacro
 
-; Ultra-fast loop cycle with speculative execution and prefetching
-; Key optimizations:
-; 1. Speculative bswap of branch target (executes parallel to data loads)
-; 2. Software prefetch for data 4 instructions ahead
-; 3. Instruction reordering for maximum ILP
-%macro loop_cycle_ultra 0
-    ; === PHASE 1: Load instruction operands ===
-    movbe rsi, [r12]         ; A address (swapped)
-    movbe rbx, [r12+8]       ; B address (swapped)
-    mov rdi, [r12+16]        ; C (branch target, raw)
-
-    ; === PHASE 2: Speculative work while waiting for addresses ===
-    ; Swap branch target NOW - will be ready if we need it
-    ; This executes in parallel with the data loads below
-    bswap rdi
-
-    ; Prefetch data for instruction N+4 (hide memory latency)
-    ; Load addresses for future instruction (96 bytes = 4 instructions ahead)
-    movbe r13, [r12+96]
-    movbe r14, [r12+104]
-
-    ; Advance instruction pointer
-    lea r12, [r12+24]
-
-    ; Issue prefetches (non-blocking, hint to cache)
-    prefetcht0 [r13]
-    prefetcht0 [r14]
-
-    ; === PHASE 3: Load data and compute ===
-    movbe rax, [rsi]         ; Load A value
-    movbe rdx, [rbx]         ; Load B value
-
-    sub rdx, rax             ; B = B - A (sets flags)
-    movbe [rbx], rdx         ; Store result
-
-    ; === PHASE 4: Conditional branch ===
-    jg %%no_branch           ; If result > 0, no branch
-    mov r12, rdi             ; Branch taken (rdi already swapped)
-%%no_branch:
-%endmacro
-
-; Standard fast cycle (no prefetch) - used when near potential branch targets
-%macro loop_cycle_fast 0
-    movbe rsi, [r12]
-    movbe rbx, [r12+8]
-    mov rdi, [r12+16]
-    bswap rdi                ; Speculative swap
-    lea r12, [r12+24]
-
-    movbe rax, [rsi]
-    movbe rdx, [rbx]
-
-    sub rdx, rax
-    movbe [rbx], rdx
-
-    jg %%no_branch
-    mov r12, rdi
-%%no_branch:
-%endmacro
-
-subleq_loop:
-    mov ecx, 4096
-
-    cmp qword [rel has_movbe], 0
-    jne .start_fast
-
-    ; Legacy path for CPUs without MOVBE (4x unroll)
-    align 32
-  .start:
-    loop_cycle
-    loop_cycle
-    loop_cycle
-    loop_cycle
-
-    sub ecx, 4
-    jz subleq.reentry
-    jmp .start
-
-    ; Ultra-fast path with MOVBE + prefetching
-    ; 16x unroll: each group = 1 ultra + 3 fast = 4 instructions
-    align 64
-  .start_fast:
-    loop_cycle_ultra        ; 1 instruction + prefetch
-    loop_cycle_fast
-    loop_cycle_fast
-    loop_cycle_fast
-
-    loop_cycle_ultra
-    loop_cycle_fast
-    loop_cycle_fast
-    loop_cycle_fast
-
-    loop_cycle_ultra
-    loop_cycle_fast
-    loop_cycle_fast
-    loop_cycle_fast
-
-    loop_cycle_ultra
-    loop_cycle_fast
-    loop_cycle_fast
-    loop_cycle_fast
-
-    sub ecx, 16
-    jz subleq.reentry
-    jmp .start
-
-%macro pusham 0
-    push rax
+; uint64_t subleq_interp(uint64_t eip, uint64_t count), count a multiple of 4
+global subleq_interp
+subleq_interp:
     push rbx
-    push rcx
-    push rdx
-    push rsi
-    push rdi
-    push rbp
-    push r8
-    push r9
-    push r10
-    push r11
     push r12
-    push r13
-    push r14
-    push r15
-%endmacro
+    mov r12, rdi
+    mov rcx, rsi
 
-%macro popam 0
-    pop r15
-    pop r14
-    pop r13
+    align 32
+.loop:
+    interp_cycle
+    interp_cycle
+    interp_cycle
+    interp_cycle
+    sub rcx, 4
+    jnz .loop
+
+    mov rax, r12
     pop r12
-    pop r11
-    pop r10
-    pop r9
-    pop r8
-    pop rbp
-    pop rdi
-    pop rsi
-    pop rdx
-    pop rcx
     pop rbx
-    pop rax
-%endmacro
-
-extern shutdown
-extern reboot
-extern pm_sleep
-
-section .text
-
-bits 64
-
-global subleq
-subleq:
-    mov r11, qword [fs:0000]        ; uint64_t cpu_number;
-
-    xor r12, r12       ; uint64_t eip = 0; (now in r12, not rsp)
-    mov r9, 1           ; int is_halted = 1;
-
-    mov r10, DAWN_CPU_BANK_BASE  ; uint64_t cpu_bank;
-    mov rax, r11
-    shl rax, 4
-    add r10, rax
-
-    mov rax, 4              ; _writeram(cpu_bank + 0, 4);        // status
-    bswap rax
-    mov qword [r10], rax
-
-    mov qword [r10 + 8], r12  ; _writeram(cpu_bank + 8, 0);        // EIP
-
-    test r11, r11
-    jz .loop_cpu0
-
-    .loop_allcpu:
-        ; check status
-        mov rax, qword [r10]
-        bswap rax
-
-        mov rbx, .jump_table0
-        jmp [rbx + rax * 8]
-        align 16
-      .jump_table0:
-        dq .loop_allcpu
-        dq .case1
-        dq .case2
-        dq .loop_allcpu
-        dq .case4
-
-    .loop_cpu0:
-        ; check status
-        mov rax, qword [r10]
-        bswap rax
-
-        mov rbx, .jump_table1
-        jmp [rbx + rax * 8]
-        align 16
-      .jump_table1:
-        times 8 dq subleq_loop
-        dq .shutdown
-        times 7 dq subleq_loop
-        dq .reboot
-        times 15 dq subleq_loop
-        dq .sleep
-
-    .reentry:
-        test r11, r11
-        jz .loop_cpu0
-
-        mov r8, r12
-        bswap r8
-        mov qword [r10 + 8], r8 ; _writeram(cpu_bank + 8, eip);
-        jmp .loop_allcpu
-
-        .case1:
-        ; active
-        test r9, r9             ; if (!is_halted) {
-        jz subleq_loop
-                                ; }
-        xor r9, r9              ; is_halted = 0;
-        mov r12, qword [r10 + 8] ; eip = _readram(cpu_bank + 8);
-        bswap r12
-        jmp subleq_loop
-
-        .case2:
-        ; stop requested
-        mov rax, 4
-        bswap rax
-        mov qword [r10], rax      ; _writeram(cpu_bank + 0, 4);
-
-        .case4:
-        ; halted
-        mov r9, 1               ; is_halted = 1;
-        hlt                     ; halt
-        jmp .loop_allcpu               ; continue;
-
-        .shutdown:
-        pusham
-        call shutdown
-        popam
-        jmp subleq_loop
-
-        .reboot:
-        pusham
-        call reboot
-        popam
-        jmp subleq_loop
-
-        .sleep:
-        pusham
-        call pm_sleep
-        popam
-        jmp subleq_loop
+    ret
 
 ; ============================================================================
 ; AVX2 screen redraw - processes 8 pixels at a time using VPSHUFB
