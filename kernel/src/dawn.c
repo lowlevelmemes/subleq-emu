@@ -357,8 +357,9 @@ static void detect_cpu_features(void) {
     /* AVX2 is bit 5 of EBX */
     has_avx2 = (ebx >> 5) & 1;
 
-    /* AVX-512F is bit 16 of EBX */
-    if (!((ebx >> 16) & 1)) {
+    /* The AVX-512 redraw needs AVX-512F (bit 16 of EBX), AVX-512BW (bit 30) for
+     * VPSHUFB on ZMM registers and AVX-512VL (bit 31) for EVEX encoded YMM ones */
+    if (!((ebx >> 16) & 1) || !((ebx >> 30) & 1) || !((ebx >> 31) & 1)) {
         has_avx512 = 0;
         return;
     }

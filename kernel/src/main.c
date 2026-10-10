@@ -58,6 +58,9 @@ void kmain(void) {
     /* Initialize ACPI (uses its own RSDP request) */
     acpi_init();
 
+    /* Enable SIMD on the BSP, as dawn_init() detects the AVX support the OS enabled */
+    enable_simd();
+
     /* Initialize Dawn emulator (framebuffer, module, date, pagemap, switches CR3) */
     dawn_init();
 
