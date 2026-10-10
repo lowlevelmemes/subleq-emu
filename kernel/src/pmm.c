@@ -44,10 +44,9 @@ struct limine_file *kernel_file = NULL;
 #define BITMAP_BASE (MEMORY_BASE / PAGE_SIZE)
 
 static volatile uint32_t *mem_bitmap;
-static volatile uint32_t initial_bitmap[] = { 0xfffffffe };
 static volatile uint32_t *tmp_bitmap;
-static size_t bitmap_pages = 1;  /* Number of pages in the bitmap */
-static size_t max_page = BITMAP_BASE + 32768;  /* Maximum page number tracked */
+static size_t bitmap_pages;  /* Number of pages in the bitmap */
+static size_t max_page;  /* Maximum page number tracked */
 static size_t last_alloc_page = BITMAP_BASE;  /* Hint for next allocation */
 
 static inline int rd_bitmap(size_t i) {
@@ -176,18 +175,28 @@ void pmm_init(void) {
     kprint(KPRN_INFO, "pmm: Highest address: %X, max_page: %U, bitmap_pages: %U",
            highest_addr, new_max_page, bitmap_pages);
 
-    /* Bootstrap: use initial_bitmap with limited max_page to allocate the real bitmap */
-    mem_bitmap = initial_bitmap;
-    /* Keep max_page small for bootstrap allocation */
-    if (!(tmp_bitmap = kmalloc(bitmap_pages))) {
-        kprint(KPRN_ERR, "kalloc failure in pmm_init(). Halted.");
-        for (;;);
+    /* Put the bitmap at the start of the first usable region above
+     * MEMORY_BASE that holds it; the pass marking free pages skips it */
+    size_t bitmap_phys = 0;
+    for (uint64_t i = 0; i < limine_memmap->entry_count; i++) {
+        struct limine_memmap_entry *entry = limine_memmap->entries[i];
+        if (entry->type != LIMINE_MEMMAP_USABLE)
+            continue;
+        size_t base = (entry->base + PAGE_SIZE - 1) & ~(size_t)(PAGE_SIZE - 1);
+        size_t end = (entry->base + entry->length) & ~(size_t)(PAGE_SIZE - 1);
+        if (base < MEMORY_BASE)
+            base = MEMORY_BASE;
+        if (end > base && end - base >= bitmap_pages * PAGE_SIZE) {
+            bitmap_phys = base;
+            break;
+        }
     }
+    if (!bitmap_phys)
+        panic("PMM: No usable region holds the page bitmap", 0);
 
-    /* Now we can use the full range */
     max_page = new_max_page;
 
-    tmp_bitmap = (uint32_t *)((size_t)tmp_bitmap + PHYS_MEM_OFFSET);
+    tmp_bitmap = (uint32_t *)(bitmap_phys + PHYS_MEM_OFFSET);
 
     /* Initialize bitmap to all 1s (all pages used) */
     for (size_t i = 0; i < (bitmap_pages * PAGE_SIZE) / sizeof(uint32_t); i++)
@@ -227,7 +236,6 @@ void pmm_init(void) {
                 continue;
 
             /* skip bitmap pages */
-            size_t bitmap_phys = (size_t)tmp_bitmap - PHYS_MEM_OFFSET;
             if (addr >= bitmap_phys && addr < bitmap_phys + (bitmap_pages * PAGE_SIZE))
                 continue;
 
